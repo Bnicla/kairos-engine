@@ -1,0 +1,35 @@
+{
+  "name": "kairos-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kairos cloud lane — hosted student version: Google Drive storage, BYO Anthropic key, onboarding, agent loop. Runs on :3002 next to the local dashboard.",
+  "scripts": {
+    "dev": "next dev -p 3002",
+    "build": "next build",
+    "start": "next start -p 3002",
+    "drive-e2e": "tsx scripts/drive-e2e.mts",
+    "push-to-drive": "tsx scripts/push-to-drive.mts",
+    "pull-from-drive": "tsx scripts/pull-from-drive.mts",
+    "harvest-registry": "tsx scripts/harvest-registry.mts",
+    "sourcing-run": "tsx scripts/sourcing-run.mts",
+    "fetch-forms": "tsx scripts/fetch-forms.mts",
+    "prune-closed": "tsx scripts/prune-closed-listings.mts",
+    "preview": "tsx scripts/onboard-preview.mts",
+    "dream-watch": "tsx scripts/dream-watch.mts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.112.4",
+    "@kairos/engine": "*",
+    "googleapis": "^173.0.0",
+    "jszip": "^3.10.1",
+    "next": "15.5.20",
+    "next-auth": "5.0.0-beta.29",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "unpdf": "^1.6.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0"
+  }
+}

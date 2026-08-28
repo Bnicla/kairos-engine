@@ -1,0 +1,10 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { generatedResumeToMarkdown } from "@kairos/engine/resume-render";
+import { markdownResumeToDocx } from "@kairos/engine/docx-render";
+const APPS = join(process.env.HOME!, "Kairos", "applications");
+const id = process.argv[2];
+const gen = JSON.parse(readFileSync(join(APPS, id, "resume.json"), "utf8"));
+const md = generatedResumeToMarkdown(gen);
+writeFileSync(join(APPS, id, "resume-source.md"), md);
+writeFileSync(join(APPS, id, "resume.docx"), await markdownResumeToDocx(md, {}));

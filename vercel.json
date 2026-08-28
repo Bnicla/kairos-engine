@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "buildCommand": "npm -w kairos-cloud run build",
+  "outputDirectory": "apps/cloud/.next"
+}

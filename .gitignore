@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+/.pnp
+.pnp.*
+
+# next.js
+.next/
+out/
+next-env.d.ts
+
+# production
+build/
+
+# env — NEVER commit secrets
+.env
+.env.local
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+
+# throwaway/one-off scripts live here, never committed
+scratch/

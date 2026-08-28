@@ -1,0 +1,29 @@
+{
+  "name": "kairos-local",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kairos local lane — LocalStore + MCP server (Claude Code driver) + dashboard viewer over ~/Kairos/.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "mcp": "tsx mcp/server.ts"
+  },
+  "dependencies": {
+    "@kairos/engine": "*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@sparticuz/chromium": "^149.0.0",
+    "next": "15.5.20",
+    "puppeteer-core": "^25.3.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "unpdf": "^1.6.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.13",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "tailwindcss": "^4.1.13"
+  }
+}
