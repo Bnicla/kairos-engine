@@ -1,0 +1,46 @@
+# Changelog
+
+Work lands as scoped commits with descriptive messages, not squashes of weeks.
+(The public repo's initial commit is a deliberate exception: 91 private commits
+were withheld for privacy, snapshotted, and scrubbed — see the README note.)
+
+## 2026-08-30 — Reliability & hygiene batch (review REQ-7, 9, 14, 15, 18)
+
+- **Drive backoff (REQ-7):** every Drive call retries 429/5xx up to 3 attempts
+  with exponential backoff + jitter, honoring `Retry-After`; per-project quota
+  risk documented in `apps/cloud/SECURITY.md`.
+- **Cloud abuse limits (REQ-9):** 256KB JSON body cap and a per-user 10-turns/
+  minute in-memory rate limit on all five agent routes (tailor, enrich,
+  interview, source, capture).
+- **Style policy as configuration (REQ-14):** `checkStyle(text, policy)` with
+  the house rules as defaults; cloud users may override via `style-policy.json`
+  in their Drive.
+- **Registry as data (REQ-15):** the board registry loads from the user's data
+  path with the committed file demoted to seed/fallback; staleness (>30 days)
+  is warned, never silent.
+- **Seam tests (REQ-18):** tailor-agent tool dispatch with a mocked Anthropic
+  client (attribution guard, unknown-file and style rejections, turn-1
+  injection block, transcript persistence); per-ATS adapter fixture parsing
+  including malformed payloads; autofill mapping extraction + option-verbatim
+  guard.
+
+## 2026-08-29 — Reliability batch (review REQ-6, 8, 10)
+
+- Sourcing fetch fails loudly: typed outcomes, retry with backoff, per-ATS
+  concurrency caps, `fetch_stats` accounting + degraded-sweep banners.
+- Model ids centralized into a `TASK_MODELS` registry.
+- Cloud lane documented docx-only until the container render path lands.
+
+## 2026-08-29 — Security batch (review REQ-2, 3, 4, 5)
+
+- Attribution guard: KB writes must trace to candidate messages (prompt-
+  injection → provenance-poisoning path closed).
+- Metric grounding bound to the claimed provenance source, not the whole corpus.
+- Autofill endpoints authenticated (Host allowlist + shared token); EEO served
+  only on explicit opt-in.
+- Encryption-key versioning + rotation for stored Anthropic keys.
+
+## 2026-08-28 — Public snapshot
+
+- Initial public work-sample snapshot (history withheld for privacy), personal
+  data scrubbed, all-rights-reserved LICENSE.

@@ -22,6 +22,7 @@ import {
   type StoredSearchProfile,
 } from "@kairos/engine/sourcing/search-profile";
 import type { RegistryEntry } from "@kairos/engine/sourcing/types";
+import { resolveRegistry } from "@kairos/engine/sourcing/registry-loader";
 
 const execFileAsync = promisify(execFile);
 
@@ -80,7 +81,13 @@ try {
 } catch {}
 if (searchProfile.notes) profileSummary += `\n\nSourcing notes: ${searchProfile.notes}`;
 
-const registry = (JSON.parse(readFileSync(REGISTRY, "utf8")) as { entries: RegistryEntry[] }).entries;
+const seed = JSON.parse(readFileSync(REGISTRY, "utf8"));
+let dataCopy: unknown = null;
+try { dataCopy = JSON.parse(readFileSync(join(OUT_DIR, "registry.json"), "utf8")); } catch {}
+const resolved = resolveRegistry(dataCopy, seed);
+if (resolved.source === "seed") console.log("▸ Registry: using committed seed (no harvested copy at ~/Kairos/sourcing/registry.json)");
+if (resolved.staleness) console.error(`⚠️  ${resolved.staleness}`);
+const registry = resolved.registry.entries;
 
 console.log(`▸ Sweeping up to ${MAX_BOARDS ?? registry.length} boards · recency cap ${searchProfile.max_age_days}d`);
 const result = await runSourcingSweep({

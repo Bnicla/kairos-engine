@@ -41,3 +41,18 @@ number attribution), and no write is honored before the candidate has sent at
 least one message. The snapshot is additionally delimited as untrusted data in
 the prompt, but the mechanical guard is the control; the prompt note is only
 defense in depth.
+
+## Drive API quota (REQ-7)
+
+Google Drive API quota is granted **per Google Cloud project**, shared across
+every Kairos user — one heavy user (or a runaway loop) degrades all tenants.
+Mitigations in place and planned:
+
+- All Drive calls run through `withBackoff` (`store/drive-ops.ts`): up to 3
+  attempts on 429/500/502/503, exponential backoff + jitter, `Retry-After`
+  honored (capped 10s).
+- Before any multi-user rollout: file a Drive API quota-increase request for
+  the project, and add a per-user request budget at the route layer (the
+  in-memory rate limit from REQ-9 is the seed of this).
+- The `_index.json` fast-path and per-request id caching keep dashboard loads
+  from fanning out into many small reads.

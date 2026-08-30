@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/store";
 import { runClaude } from "@/lib/claude-cli";
-import { buildAutofillProfile, corsHeaders, rejectUnauthorized } from "@/lib/autofill";
+import { buildAutofillProfile, corsHeaders, rejectUnauthorized, extractMappingArray, filterSafeMappings, type MapField } from "@/lib/autofill";
 
 export const dynamic = "force-dynamic";
 // One Claude call maps the whole form; allow room for a cold CLI start.
@@ -21,12 +21,6 @@ export const maxDuration = 60;
  * machine. Only a chrome-extension origin may call it.
  */
 
-interface IncomingField {
-  id: string;
-  label: string;
-  type: "text" | "select" | "combobox" | "radio" | "toggle";
-  options?: string[];
-}
 
 export function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
@@ -52,25 +46,11 @@ Return ONLY a JSON array of { "id": "<field id>", "value": "<value>" } for the f
 
 Output: a JSON array only. No prose, no code fences.`;
 
-function extractArray(text: string): Array<{ id: string; value: string }> {
-  const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start === -1 || end <= start) return [];
-  try {
-    const arr = JSON.parse(text.slice(start, end + 1));
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .filter((m) => m && typeof m.id === "string" && m.value != null)
-      .map((m) => ({ id: String(m.id), value: String(m.value) }));
-  } catch {
-    return [];
-  }
-}
 
 export async function POST(req: NextRequest) {
-  let fields: IncomingField[] = [];
+  let fields: MapField[] = [];
   try {
-    const body = (await req.json()) as { fields?: IncomingField[] };
+    const body = (await req.json()) as { fields?: MapField[] };
     fields = Array.isArray(body.fields) ? body.fields.slice(0, 120) : [];
   } catch {
     return NextResponse.json({ error: "bad request" }, { status: 400, headers: corsHeaders(req) });
@@ -104,16 +84,8 @@ Return the JSON array of { id, value } now.`;
 
   try {
     const out = await runClaude(prompt, 55_000);
-    const mappings = extractArray(out);
-    // Keep only ids that were actually sent, and (for choice fields) values that
-    // are one of the provided options — a mechanical guard against a stray value.
-    const byId = new Map(fields.map((f) => [f.id, f]));
-    const safe = mappings.filter((m) => {
-      const f = byId.get(m.id);
-      if (!f) return false;
-      if (f.options && f.options.length) return f.options.some((o) => o === m.value);
-      return true;
-    });
+    const mappings = extractMappingArray(out);
+    const safe = filterSafeMappings(fields, mappings);
     return NextResponse.json({ mappings: safe }, { headers: corsHeaders(req) });
   } catch (e) {
     return NextResponse.json(

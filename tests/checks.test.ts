@@ -5,6 +5,7 @@ import {
   checkStyle,
   extractMetricTokens,
   isHardStyleViolation,
+  resolveStylePolicy,
 } from "@kairos/engine/tools/checks";
 import type { Experience } from "@kairos/engine/kb/types";
 import type { GeneratedResume } from "@kairos/engine/types";
@@ -178,5 +179,27 @@ describe("extractMetricTokens — edge cases (REQ-3)", () => {
   it("excludes tenure phrases but keeps bare N+ claims", () => {
     expect(raws("15+ years of experience")).toEqual([]);
     expect(raws("supported 15+ teams")).toContain("15+");
+  });
+});
+
+describe("style policy overrides (REQ-14)", () => {
+  it("default policy flags em dashes and banned words", () => {
+    const v = checkStyle("We leverage synergies — daily.");
+    expect(v.some((x) => x.rule === "em-dash")).toBe(true);
+    expect(v.some((x) => x.rule === "banned-word")).toBe(true);
+  });
+
+  it("a custom policy can relax the em-dash ban and swap the banned list", () => {
+    const policy = resolveStylePolicy({ banEmDashes: false, bannedWords: ["moist"] });
+    const v = checkStyle("We leverage synergies — daily.", policy);
+    expect(v.some((x) => x.rule === "em-dash")).toBe(false);
+    expect(v.some((x) => x.rule === "banned-word")).toBe(false);
+    expect(checkStyle("A moist opportunity.", policy).some((x) => x.rule === "banned-word")).toBe(true);
+  });
+
+  it("partial policies inherit defaults for omitted fields", () => {
+    const policy = resolveStylePolicy({ leadinMaxWords: 8 });
+    expect(policy.banEmDashes).toBe(true);
+    expect(policy.bannedWords.length).toBeGreaterThan(10);
   });
 });

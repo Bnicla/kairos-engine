@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rateLimit, readJsonCapped } from "../../../lib/guard";
 import { getSessionContext, isContextError, getAnthropicKey } from "../../../lib/session";
 import { runEnrichmentTurn, type ChatMessage } from "../../../lib/enrich-agent";
 import { ClaudeUserError } from "../../../lib/claude";
@@ -19,6 +20,8 @@ export async function POST(req: Request): Promise<Response> {
   if (isContextError(ctx)) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const limited = rateLimit(ctx.email);
+  if (limited) return limited;
   const key = await getAnthropicKey(ctx.store);
   if (!key) {
     return NextResponse.json(
@@ -27,12 +30,9 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  let body: EnrichRequest;
-  try {
-    body = (await req.json()) as EnrichRequest;
-  } catch {
-    return NextResponse.json({ error: "Bad request." }, { status: 400 });
-  }
+  const parsed = await readJsonCapped<EnrichRequest>(req);
+  if ("error" in parsed) return parsed.error;
+  const body = parsed.body;
   if (typeof body.fileName !== "string" || !Array.isArray(body.messages)) {
     return NextResponse.json({ error: "Bad request." }, { status: 400 });
   }

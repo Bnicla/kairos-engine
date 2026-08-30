@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { rateLimit, readJsonCapped } from "../../../lib/guard";
 import { getSessionContext, isContextError, getAnthropicKey } from "../../../lib/session";
 import { resolveModel } from "../../../lib/models";
 import { getOrDeriveSearchProfile } from "../../../lib/prefs-agent";
 import { runSourcingSweep } from "@kairos/engine/sourcing/sweep";
 import { loadIndexHealed } from "@kairos/engine/applications";
 import type { RegistryEntry } from "@kairos/engine/sourcing/types";
-import registryFile from "@kairos/engine/sourcing/registry.json";
+import registrySeed from "@kairos/engine/sourcing/registry.json";
+import { resolveRegistry, type RegistryFile } from "@kairos/engine/sourcing/registry-loader";
 
 export const dynamic = "force-dynamic";
 // A full sweep is thousands of board fetches plus one triage call.
@@ -17,6 +19,8 @@ export async function POST(req: Request): Promise<Response> {
   if (isContextError(ctx)) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const limited = rateLimit(ctx.email);
+  if (limited) return limited;
   const key = await getAnthropicKey(ctx.store);
   if (!key) {
     return NextResponse.json(
@@ -26,9 +30,16 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   let model: string | undefined;
-  try {
-    model = ((await req.json()) as { model?: string }).model;
-  } catch {}
+  {
+    // Tolerates an empty/absent body (legacy behavior) but still enforces the
+    // size cap: only a 413 short-circuits.
+    const parsed = await readJsonCapped<{ model?: string }>(req);
+    if ("error" in parsed) {
+      if (parsed.error.status === 413) return parsed.error;
+    } else {
+      model = parsed.body.model;
+    }
+  }
 
   const [profile, index, seenFile, profileRaw] = await Promise.all([
     getOrDeriveSearchProfile(ctx.store),
@@ -37,11 +48,14 @@ export async function POST(req: Request): Promise<Response> {
     ctx.store.readFile(["profile.md"]),
   ]);
   const seenUrls = new Set<string>(Object.keys(seenFile ?? {}));
+  const registryData = await ctx.store.readJson<unknown>(["sourcing", "registry.json"]).catch(() => null);
+  const registryResolved = resolveRegistry(registryData, registrySeed as unknown as RegistryFile);
+  if (registryResolved.staleness) console.warn("[source] " + registryResolved.staleness);
   let profileSummary = (profileRaw ?? "").slice(0, 1500);
   if (profile.notes) profileSummary += `\n\nSourcing notes: ${profile.notes}`;
 
   const result = await runSourcingSweep({
-    registry: (registryFile as { entries: RegistryEntry[] }).entries,
+    registry: registryResolved.registry.entries,
     profile,
     seenUrls,
     knownApplications: index.applications.map((a) => ({ company: a.company, role: a.role })),

@@ -22,6 +22,13 @@ import {
 } from "@kairos/engine/prompts/cover-letter";
 import { markdownLetterToDocx } from "@kairos/engine/docx-render";
 import { checkStyle, isHardStyleViolation } from "@kairos/engine/tools/checks";
+import { resolveStylePolicy, type StylePolicy } from "@kairos/engine/tools/checks";
+
+/** Load the user's optional style policy from their Drive (REQ-14); defaults to house rules. */
+export async function loadStylePolicy(store: { readJson: <T>(p: string[]) => Promise<T | null> }): Promise<StylePolicy> {
+  const partial = await store.readJson<Partial<StylePolicy>>(["style-policy.json"]).catch(() => null);
+  return resolveStylePolicy(partial ?? undefined);
+}
 import { saveScoredReport, saveGeneratedResume } from "@kairos/engine/tools/ops";
 import type { GeneratedResume, ScoreReport } from "@kairos/engine/types";
 import type { TemplateSpec } from "@kairos/engine/docx-render";
@@ -215,6 +222,7 @@ export async function runGenerationForApp(
 
     try {
       const result = await saveGeneratedResume(store, appId, parsed, {
+        stylePolicy: await loadStylePolicy(store),
         headline: profile.headline,
         template: templateSpec?.overrides,
       });
@@ -304,7 +312,7 @@ export async function runCoverLetterForApp(
       .trim();
     if (!markdown) throw new ClaudeUserError("The letter came back empty. Try again.");
 
-    const hard = checkStyle(markdown).filter(isHardStyleViolation);
+    const hard = checkStyle(markdown, await loadStylePolicy(store)).filter(isHardStyleViolation);
     if (hard.length === 0) break;
     if (attempt === 1) {
       throw new ClaudeUserError(

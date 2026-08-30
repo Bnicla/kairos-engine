@@ -12,6 +12,8 @@ import {
   isHardStyleViolation,
   type AtsCoverage,
   type StyleViolation,
+  resolveStylePolicy,
+  type StylePolicy,
 } from "@kairos/engine/tools/checks";
 
 /**
@@ -64,6 +66,8 @@ export async function saveGeneratedResume(
     template?: Partial<TemplateSpec>;
     /** Escape hatch for a metric the KB genuinely holds in another wording — logs a warning instead of failing. */
     allowUngroundedMetrics?: boolean;
+    /** Per-user style policy (REQ-14); defaults to the house rules. */
+    stylePolicy?: StylePolicy;
   } = {},
 ): Promise<SaveResumeResult> {
   const parsed = GeneratedResumeSchema.safeParse(gen);
@@ -94,7 +98,7 @@ export async function saveGeneratedResume(
 
   // House style (N5): em dashes / banned words / "not just X but Y" block the save.
   const md = generatedResumeToMarkdown(gen);
-  const style = checkStyle(md);
+  const style = checkStyle(md, resolveStylePolicy(opts.stylePolicy));
   const hardStyle = style.filter(isHardStyleViolation);
   if (hardStyle.length) {
     throw new Error(`Resume violates house style: ${hardStyle.map((v) => `${v.rule} (${v.detail})`).join("; ")}`);

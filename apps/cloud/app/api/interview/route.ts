@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rateLimit, readJsonCapped } from "../../../lib/guard";
 import { getSessionContext, isContextError, getAnthropicKey } from "../../../lib/session";
 import { runInterviewPrepTurn } from "../../../lib/interview-agent";
 import { ClaudeUserError } from "../../../lib/claude";
@@ -18,17 +19,16 @@ interface PrepRequest {
 export async function POST(req: Request): Promise<Response> {
   const ctx = await getSessionContext();
   if (isContextError(ctx)) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const limited = rateLimit(ctx.email);
+  if (limited) return limited;
   const key = await getAnthropicKey(ctx.store);
   if (!key) {
     return NextResponse.json({ error: "Add your Anthropic API key in settings first." }, { status: 400 });
   }
 
-  let body: PrepRequest;
-  try {
-    body = (await req.json()) as PrepRequest;
-  } catch {
-    return NextResponse.json({ error: "Bad request." }, { status: 400 });
-  }
+  const parsed = await readJsonCapped<PrepRequest>(req);
+  if ("error" in parsed) return parsed.error;
+  const body = parsed.body;
   if (typeof body.appId !== "string" || !Array.isArray(body.messages)) {
     return NextResponse.json({ error: "Bad request." }, { status: 400 });
   }

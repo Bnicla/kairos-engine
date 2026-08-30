@@ -20,15 +20,58 @@ export interface StyleViolation {
 }
 
 const NOT_JUST = /\b(?:not\s+(?:just|only|merely)|isn't\s+just|it's\s+not\s+about)\b[^.\n]{0,80}\bbut\b/i;
-const EMPTY_ADVERBS = /\b(extremely|incredibly|deeply|truly)\b/gi;
+
+/**
+ * Configurable style policy (REQ-14 / DEC-7 content-agnostic engine). The
+ * current house rules are the DEFAULTS, not constants baked into behavior:
+ * a cloud user's Drive may carry a style-policy.json overriding any field
+ * (per-user, eventually per-language). Omitted fields inherit the default.
+ */
+export interface StylePolicy {
+  bannedWords: string[];
+  banEmDashes: boolean;
+  banNotJustBut: boolean;
+  /** Max words for a bold bullet lead-in title. */
+  leadinMaxWords: number;
+  /** Empty-adverb list (soft violation). */
+  emptyAdverbs: string[];
+  /** Allow "orchestrat*" near AI/system vocabulary; flag it elsewhere. */
+  contextualOrchestration: boolean;
+}
+
+export const DEFAULT_STYLE_POLICY: StylePolicy = {
+  bannedWords: [...BANNED_WORDS],
+  banEmDashes: true,
+  banNotJustBut: true,
+  leadinMaxWords: 4,
+  emptyAdverbs: ["extremely", "incredibly", "deeply", "truly"],
+  contextualOrchestration: true,
+};
+
+/** Merge a partial user policy onto the defaults (unknown fields ignored). */
+export function resolveStylePolicy(partial?: Partial<StylePolicy> | null): StylePolicy {
+  if (!partial) return DEFAULT_STYLE_POLICY;
+  return {
+    bannedWords: Array.isArray(partial.bannedWords) ? partial.bannedWords : DEFAULT_STYLE_POLICY.bannedWords,
+    banEmDashes: partial.banEmDashes ?? DEFAULT_STYLE_POLICY.banEmDashes,
+    banNotJustBut: partial.banNotJustBut ?? DEFAULT_STYLE_POLICY.banNotJustBut,
+    leadinMaxWords: partial.leadinMaxWords ?? DEFAULT_STYLE_POLICY.leadinMaxWords,
+    emptyAdverbs: Array.isArray(partial.emptyAdverbs) ? partial.emptyAdverbs : DEFAULT_STYLE_POLICY.emptyAdverbs,
+    contextualOrchestration: partial.contextualOrchestration ?? DEFAULT_STYLE_POLICY.contextualOrchestration,
+  };
+}
 
 /** Hard style violations (em dashes, banned words, "not just X but Y") + soft ones (adverbs). */
-export function checkStyle(text: string): StyleViolation[] {
+export function checkStyle(text: string, policy: StylePolicy = DEFAULT_STYLE_POLICY): StyleViolation[] {
   const out: StyleViolation[] = [];
-  const emDashes = (text.match(/—/g) ?? []).length;
-  if (emDashes > 0) out.push({ rule: "em-dash", detail: `${emDashes} em dash(es) present` });
-  if (NOT_JUST.test(text)) out.push({ rule: "not-just-but", detail: `matches "not just X but Y" pattern` });
-  for (const w of BANNED_WORDS) {
+  if (policy.banEmDashes) {
+    const emDashes = (text.match(/—/g) ?? []).length;
+    if (emDashes > 0) out.push({ rule: "em-dash", detail: `${emDashes} em dash(es) present` });
+  }
+  if (policy.banNotJustBut && NOT_JUST.test(text)) {
+    out.push({ rule: "not-just-but", detail: `matches "not just X but Y" pattern` });
+  }
+  for (const w of policy.bannedWords) {
     const re = new RegExp(w.includes(" ") ? escapeRe(w) : `\\b${escapeRe(w)}\\w*`, "i");
     const m = text.match(re);
     if (m) out.push({ rule: "banned-word", detail: `"${m[0]}"` });
@@ -36,14 +79,18 @@ export function checkStyle(text: string): StyleViolation[] {
   // "orchestration/orchestrate" is real AI terminology (agent orchestration,
   // model orchestration) but a worn-out power-verb in general use. Allow it only
   // when an AI/agent/system term sits nearby; flag it otherwise (owner directive).
+  const orchEnabled = policy.contextualOrchestration && !policy.bannedWords.some((w) => w.startsWith("orchestrat"));
   const ORCH_CONTEXT = /\b(agent|agents|model|models|llm|llms|ai|ml|workflow|workflows|pipeline|pipelines|service|services|microservice|task|tasks|container|kubernetes|prompt|prompts|tool|tools|system|systems|data)\b/i;
-  for (const m of text.matchAll(/\borchestrat\w*/gi)) {
+  for (const m of orchEnabled ? text.matchAll(/\borchestrat\w*/gi) : []) {
     const i = m.index ?? 0;
     const ctx = text.slice(Math.max(0, i - 60), i + m[0].length + 60);
     if (!ORCH_CONTEXT.test(ctx)) out.push({ rule: "banned-word", detail: `"${m[0]}" (generic power-verb; fine only in AI/agent context)` });
   }
-  const adv = text.match(EMPTY_ADVERBS);
-  if (adv) out.push({ rule: "empty-adverb", detail: [...new Set(adv.map((a) => a.toLowerCase()))].join(", ") });
+  if (policy.emptyAdverbs.length) {
+    const advRe = new RegExp(`\\b(${policy.emptyAdverbs.map(escapeRe).join("|")})\\b`, "gi");
+    const adv = text.match(advRe);
+    if (adv) out.push({ rule: "empty-adverb", detail: [...new Set(adv.map((a) => a.toLowerCase()))].join(", ") });
+  }
 
   // Soft: the same opening verb on 4+ bullets reads as machine cadence, even
   // when the verb itself isn't banned (the "Drove/Drove/Drove" failure mode).
@@ -72,7 +119,8 @@ export function checkStyle(text: string): StyleViolation[] {
     // Connectors (&, +, /) don't count: "Global Expansion & Roadmap Execution" is 4 words.
     const words = core.split(/\s+/).filter((w) => /\w/.test(w));
     const problems: string[] = [];
-    if (words.length > 5) problems.push(`${words.length} words (max 5)`);
+    const maxWords = policy.leadinMaxWords + 1; // one-word tolerance, matching historic behavior (4 → 5)
+    if (words.length > maxWords) problems.push(`${words.length} words (max ${maxWords})`);
     if (core.includes(",")) problems.push("contains a comma (reads as a claim, not a title)");
     if (/\b(that|which|who)\b/i.test(core)) problems.push("contains a relative clause");
     if (problems.length) {

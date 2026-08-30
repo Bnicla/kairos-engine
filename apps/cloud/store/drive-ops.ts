@@ -25,11 +25,61 @@ export const FOLDER_MIME = "application/vnd.google-apps.folder";
 /** Escape a value for a Drive query `name = '...'` clause. */
 export const escapeQueryValue = (value: string) => value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 
+/**
+ * Retry/backoff for Drive calls (REQ-7). Drive 429/5xx are routine under load,
+ * and quota is shared per Google Cloud project across ALL users — one heavy
+ * user degrades everyone, so absorbing transient throttles here matters.
+ * Retries up to 2 extra attempts on 429/500/502/503 with exponential backoff +
+ * jitter, honoring Retry-After when Drive names a wait (capped at 10s).
+ */
+const RETRYABLE = new Set([429, 500, 502, 503]);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function driveStatus(err: unknown): number | undefined {
+  const e = err as { code?: number | string; response?: { status?: number } } | null;
+  const raw = e?.response?.status ?? e?.code;
+  const n = typeof raw === "string" ? parseInt(raw, 10) : raw;
+  return Number.isFinite(n) ? (n as number) : undefined;
+}
+
+function retryAfterMs(err: unknown): number | null {
+  const h = (err as { response?: { headers?: Record<string, string> } })?.response?.headers?.["retry-after"];
+  const s = Number(h);
+  return Number.isFinite(s) && s > 0 ? Math.min(s * 1000, 10_000) : null;
+}
+
+export async function withBackoff<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const status = driveStatus(err);
+      if (i >= attempts - 1 || status === undefined || !RETRYABLE.has(status)) throw err;
+      const wait = retryAfterMs(err) ?? Math.min(400 * 2 ** i + Math.random() * 300, 10_000);
+      await sleep(wait);
+    }
+  }
+}
+
+/** Wrap every op in withBackoff — exported separately so tests can exercise it over fake ops. */
+export function withDriveBackoff(ops: DriveOps): DriveOps {
+  const wrapped = {} as DriveOps;
+  for (const key of Object.keys(ops) as (keyof DriveOps)[]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (wrapped as any)[key] = (...args: unknown[]) => withBackoff(() => (ops[key] as any)(...args));
+  }
+  return wrapped;
+}
+
 export function googleDriveOps(accessToken: string): DriveOps {
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: accessToken });
   const drive: drive_v3.Drive = google.drive({ version: "v3", auth });
 
+  return withDriveBackoff(buildRawOps(drive));
+}
+
+function buildRawOps(drive: drive_v3.Drive): DriveOps {
   const media = (body: string | Buffer, mimeType: string) => ({
     mimeType,
     body: typeof body === "string" ? body : Readable.from(body),

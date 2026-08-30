@@ -69,3 +69,39 @@ describe("fetchBoardDetailed (REQ-6 — typed outcomes, retry, loud failures)", 
     expect(r.failure?.kind).toBe("network");
   });
 });
+
+describe("adapter payload parsing (REQ-18 — per-ATS fixtures incl. malformed)", () => {
+  it("ashby: normal payload with publishedAt and isRemote", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ jobs: [{ title: "PM", jobUrl: "https://a/1", location: "NYC", isRemote: true, publishedAt: "2026-08-01T00:00:00Z" }] }),
+    ));
+    const r = await fetchBoardDetailed({ ats: "ashby", slug: "acme" });
+    expect(r.postings[0]).toMatchObject({ ats: "ashby", title: "PM", remote: true });
+    expect(r.postings[0].age_days).toBeGreaterThan(0);
+  });
+
+  it("lever: array payload with workplaceType remote", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse([{ text: "Head of AI", hostedUrl: "https://l/1", workplaceType: "remote", categories: { location: "US" } }]),
+    ));
+    const r = await fetchBoardDetailed({ ats: "lever", slug: "acme" });
+    expect(r.postings[0]).toMatchObject({ ats: "lever", title: "Head of AI", remote: true, location: "US" });
+  });
+
+  it("malformed-but-200 payloads resolve to zero postings, not a crash", async () => {
+    for (const weird of [{ jobs: "not-an-array" }, { unexpected: true }, [], "quoted-string", 42, null]) {
+      vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(weird)));
+      const r = await fetchBoardDetailed({ ats: "ashby", slug: "acme" });
+      expect(r.postings).toEqual([]);
+    }
+  });
+
+  it("entries missing required fields are dropped, valid siblings kept", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      jsonResponse({ jobs: [{ title: "No URL" }, { jobUrl: "https://a/2" }, { title: "Good", jobUrl: "https://a/3" }] }),
+    ));
+    const r = await fetchBoardDetailed({ ats: "ashby", slug: "acme" });
+    expect(r.postings).toHaveLength(1);
+    expect(r.postings[0].title).toBe("Good");
+  });
+});

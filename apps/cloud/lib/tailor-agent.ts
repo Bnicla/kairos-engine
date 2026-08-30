@@ -11,6 +11,7 @@ import { insertUnderSection, serializeExperience } from "@kairos/engine/kb/exper
 import type { ScoreReport } from "@kairos/engine/types";
 import { loadQAIndex, readQA, upsertQA } from "@kairos/engine/qabank";
 import { checkStyle, isHardStyleViolation } from "@kairos/engine/tools/checks";
+import { loadStylePolicy } from "./apps-agent";
 import { checkAttribution } from "@kairos/engine/tools/attribution";
 import { ClaudeUserError, toUserError } from "./claude";
 import { resolveModel } from "./models";
@@ -281,7 +282,7 @@ export async function runTailorTurn(
             });
             continue;
           }
-          const hard = checkStyle(input.answer).filter(isHardStyleViolation);
+          const hard = checkStyle(input.answer, await loadStylePolicy(store)).filter(isHardStyleViolation);
           if (hard.length) {
             results.push({
               type: "tool_result",

@@ -133,3 +133,48 @@ export async function buildAutofillProfile(store: Store) {
     resumes,
   };
 }
+
+// --- Field-mapping helpers (extracted from the map route for testability, REQ-18) ---
+
+export interface MapField {
+  id: string;
+  label: string;
+  type: "text" | "select" | "combobox" | "radio" | "toggle";
+  options?: string[];
+}
+
+export interface FieldMapping {
+  id: string;
+  value: string;
+}
+
+/** Pull the first JSON array out of model output (fenced, prose-wrapped, or bare). */
+export function extractMappingArray(text: string): FieldMapping[] {
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start === -1 || end <= start) return [];
+  try {
+    const arr = JSON.parse(text.slice(start, end + 1));
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((m) => m && typeof m.id === "string" && m.value != null)
+      .map((m) => ({ id: String(m.id), value: String(m.value) }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Mechanical guard on model mappings: only ids that were actually sent, and for
+ * choice fields only values copied VERBATIM from that field's options — a
+ * hallucinated option must never be clicked into a form.
+ */
+export function filterSafeMappings(fields: MapField[], mappings: FieldMapping[]): FieldMapping[] {
+  const byId = new Map(fields.map((f) => [f.id, f]));
+  return mappings.filter((m) => {
+    const f = byId.get(m.id);
+    if (!f) return false;
+    if (f.options && f.options.length) return f.options.some((o) => o === m.value);
+    return true;
+  });
+}
