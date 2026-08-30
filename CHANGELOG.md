@@ -4,6 +4,27 @@ Work lands as scoped commits with descriptive messages, not squashes of weeks.
 (The public repo's initial commit is a deliberate exception: 91 private commits
 were withheld for privacy, snapshotted, and scrubbed — see the README note.)
 
+## 2026-08-30 — Second-tier reviewer items: QA retrieval, context budgets, ADR-0006
+
+- **Relevance-ranked Q&A bank retrieval**: banked answers offered to the
+  tailoring agent are now ranked against the job (role + ad snapshot + scored
+  gaps) by `rankQAEntries` — IDF-weighted lexical scoring with stem-blind
+  prefix matching (deliberately not embeddings: deterministic, offline, free,
+  CI-evaluable). Recency was the old heuristic and remains the fallback for
+  an empty ranking. The retrieval eval (`tests/qa-retrieval.test.ts`) runs in
+  CI; its labeled-query hit-rate check caught a real gap during development
+  ("relocating" failed to match "relocate/relocation"), which is exactly the
+  regression class it exists to catch.
+- **Named context budgets** (`packages/engine/context-budget.ts`): the tailor
+  agent's bare `.slice(0, 12_000)` prompt truncations are replaced by a
+  clipper with named per-section budgets. Truncation is now visible to the
+  model (an explicit omitted-N-characters marker instead of a silent
+  mid-sentence cut) and to the operator (a clip report logged per turn).
+- **ADR-0006**: records why structured outputs use prompt-JSON + zod
+  validate-and-retry rather than forced tool_choice (forced tool use is
+  incompatible with adaptive thinking on the quality-pinned tasks), and names
+  `z.toJSONSchema` as the migration path if that constraint lifts.
+
 ## 2026-08-30 — Tier-2 scoring eval: first live run
 
 - 5/5 fixtures within expected bands (CLI provider). First attempt went 3/5:

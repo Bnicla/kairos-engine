@@ -83,6 +83,57 @@ export async function upsertQA(
 }
 
 /** Rank stored answers by token/topic overlap with a new question. */
+/**
+ * IDF-weighted lexical ranking over bank entries (BM25-lite). Deliberately NOT
+ * embeddings: the bank is dozens of entries, this is deterministic, offline,
+ * free, and testable to exhaustion — rare shared terms ("relocation",
+ * "clearance") dominate, common filler doesn't. Pure function so the retrieval
+ * quality is CI-evaluable (tests/qa-retrieval.test.ts).
+ */
+export function rankQAEntries<E extends { canonical_question: string; topics: string[] }>(
+  query: string,
+  entries: E[],
+  limit = 12,
+): { entry: E; score: number }[] {
+  const q = new Set(tokens(query));
+  if (q.size === 0 || entries.length === 0) return [];
+  const entryTokens = entries.map((e) => new Set([...tokens(e.canonical_question), ...e.topics.flatMap(tokens)]));
+  const df = new Map<string, number>();
+  for (const set of entryTokens) for (const t of set) df.set(t, (df.get(t) ?? 0) + 1);
+  const idf = (t: string) => Math.log(1 + entries.length / (df.get(t) ?? entries.length));
+  // Stem-blind: "relocating" must match "relocate"/"relocation". English
+  // inflections diverge before the suffix, so containment is not enough —
+  // measure the shared prefix and require it to cover most of the shorter
+  // token (≥6 chars and ≥75%): relocate/relocating share 7 ✓, role/roles
+  // stays exact-only (short words are too collision-prone to stem).
+  const sharedPrefix = (a: string, b: string): number => {
+    let i = 0;
+    const n = Math.min(a.length, b.length);
+    while (i < n && a[i] === b[i]) i++;
+    return i;
+  };
+  const matches = (t: string, set: Set<string>): string | null => {
+    if (set.has(t)) return t;
+    for (const e of set) {
+      const p = sharedPrefix(t, e);
+      if (p >= 6 && p >= Math.min(t.length, e.length) * 0.75) return e;
+    }
+    return null;
+  };
+  return entries
+    .map((e, i) => {
+      let score = 0;
+      for (const t of q) {
+        const hit = matches(t, entryTokens[i]);
+        if (hit) score += idf(hit);
+      }
+      return { entry: e, score: score / Math.sqrt(entryTokens[i].size || 1) };
+    })
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
 export async function searchQA(
   store: Store,
   question: string,
