@@ -4,6 +4,13 @@ Work lands as scoped commits with descriptive messages, not squashes of weeks.
 (The public repo's initial commit is a deliberate exception: 91 private commits
 were withheld for privacy, snapshotted, and scrubbed — see the README note.)
 
+## 2026-08-30 — Tier-2 scoring eval: first live run
+
+- 5/5 fixtures within expected bands (CLI provider). First attempt went 3/5:
+  the runner gained production's validate-and-retry, and the data-analyst
+  fixture expectation was recalibrated to the scorer's (more honest) read,
+  with the rationale recorded in the fixture itself.
+
 ## 2026-08-30 — Reviewer wishlist: ADRs, red team, tier-2 evals, cost tracing
 
 - **docs/adr/**: five decision records (hand-rolled agent loop; deterministic

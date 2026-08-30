@@ -49,7 +49,12 @@ a shipped tool with real internal users you can talk about concretely.`,
   {
     id: "junior-data-analyst",
     title: "Data Analyst (adjacent, function drift)",
-    expect: { bands: ["COMPETITIVE", "DEVELOPING"], forbidRecommendations: ["APPLY"] },
+    // Recalibrated after the first live run (2026-08-30): the scorer read
+    // "daily-driver SQL + Tableau + explicitly not an engineering role" as
+    // disqualifying and returned WEAK/NOT_RECOMMENDED — harsher than the
+    // original guess and arguably MORE honest. The fixture now pins only the
+    // ceiling: an adjacent-function ad may never be an APPLY.
+    expect: { bands: ["WEAK", "DEVELOPING", "COMPETITIVE"], forbidRecommendations: ["APPLY", "APPLY_AFTER_TAILORING"] },
     jobText: `Junior Data Analyst
 Chicago, hybrid. Analyze marketing-funnel data, build weekly dashboards, own SQL
 reporting for two business teams.

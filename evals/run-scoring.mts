@@ -46,10 +46,22 @@ for (const f of fixtures) {
   let rec: string | null = null;
   let pass = false;
   try {
-    const raw = await callModel(provider, prompt);
-    const parsed = ScoreReportSchema.safeParse(extractJson(raw));
+    // Mirror production: one validate-and-retry with the findings fed back.
+    let raw = await callModel(provider, prompt);
+    let parsed = ScoreReportSchema.safeParse(extractJson(raw));
     if (!parsed.success) {
-      notes.push(`schema invalid: ${parsed.error.issues[0]?.message ?? "unknown"}`);
+      notes.push(`retry after schema issue: ${parsed.error.issues[0]?.message ?? "unknown"}`);
+      raw = await callModel(
+        provider,
+        `${prompt}\n\nYour previous attempt failed validation: ${parsed.error.issues
+          .slice(0, 3)
+          .map((i) => `${i.path.join(".")}: ${i.message}`)
+          .join("; ")}\nReturn the corrected ScoreReport JSON only.`,
+      );
+      parsed = ScoreReportSchema.safeParse(extractJson(raw));
+    }
+    if (!parsed.success) {
+      notes.push(`schema invalid after retry: ${parsed.error.issues[0]?.message ?? "unknown"}`);
     } else {
       band = parsed.data.match.overall_band;
       rec = parsed.data.recommendation;
