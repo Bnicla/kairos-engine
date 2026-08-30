@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/store";
 import { createApplication, loadIndex } from "@kairos/engine/applications";
+import { rejectUnauthorized } from "@/lib/autofill";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ function corsHeaders(req: NextRequest): Record<string, string> {
     return {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, X-Kairos-Token",
       Vary: "Origin",
     };
   }
@@ -28,11 +29,15 @@ export function OPTIONS(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const store = getStore();
+  const denied = await rejectUnauthorized(req, store);
+  if (denied) {
+    return NextResponse.json({ ok: false, error: denied.message }, { status: denied.status, headers: corsHeaders(req) });
+  }
   const { url, company, title, text } = await req.json().catch(() => ({} as Record<string, string>));
   if (!company || !title) {
     return NextResponse.json({ ok: false, error: "missing company/title" }, { status: 400, headers: corsHeaders(req) });
   }
-  const store = getStore();
   const snapshot = text || `# ${title} — ${company}\n\n(Captured from ${url} by the autofill extension.)\n\n${url ?? ""}`;
   // Reuse an existing ACTIVE application for the same role instead of creating a
   // duplicate. The extension sends the URL slug as the company ("elitetechnology"),

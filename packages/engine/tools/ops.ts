@@ -81,7 +81,9 @@ export async function saveGeneratedResume(
   const grounding = checkResumeGrounding(gen, experiences, extraCorpus);
   const warnings: string[] = [];
   const hardGrounding = grounding.filter(
-    (g) => g.kind !== "ungrounded_metric" || !opts.allowUngroundedMetrics,
+    (g) =>
+      (g.kind !== "ungrounded_metric" && g.kind !== "metric_source_mismatch") ||
+      !opts.allowUngroundedMetrics,
   );
   if (hardGrounding.length) {
     throw new Error(

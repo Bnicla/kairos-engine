@@ -6,8 +6,20 @@
 
 const KAIROS_BASE = "http://localhost:3000";
 
+// Shared-secret auth: the server generates ~/Kairos/.secrets/autofill-token;
+// the user pastes it once into the popup's settings and every request carries
+// it. Without it the API refuses to serve the profile.
+async function authHeaders() {
+  const { kairosToken } = await chrome.storage.local.get("kairosToken");
+  return kairosToken ? { "X-Kairos-Token": kairosToken } : {};
+}
+
 async function getProfile() {
-  const res = await fetch(`${KAIROS_BASE}/api/autofill-profile`, { cache: "no-store" });
+  const res = await fetch(`${KAIROS_BASE}/api/autofill-profile`, {
+    cache: "no-store",
+    headers: await authHeaders(),
+  });
+  if (res.status === 401) throw new Error("token_required");
   if (!res.ok) throw new Error(`profile ${res.status}`);
   return res.json();
 }
@@ -16,10 +28,11 @@ async function getProfile() {
 // the message boundary (structured clone won't reliably carry a File/Blob from
 // a worker to a content script).
 async function getFileBase64(path) {
-  let res = await fetch(`${KAIROS_BASE}${path}`, { cache: "no-store" });
+  const headers = await authHeaders();
+  let res = await fetch(`${KAIROS_BASE}${path}`, { cache: "no-store", headers });
   // If the PDF hasn't been rendered for this app, fall back to the .docx.
   if (!res.ok && path.endsWith(".pdf")) {
-    res = await fetch(`${KAIROS_BASE}${path.replace(/\.pdf$/, ".docx")}`, { cache: "no-store" });
+    res = await fetch(`${KAIROS_BASE}${path.replace(/\.pdf$/, ".docx")}`, { cache: "no-store", headers });
   }
   if (!res.ok) throw new Error(`file ${res.status}`);
   const buf = await res.arrayBuffer();
@@ -40,10 +53,11 @@ async function getFileBase64(path) {
 async function mapFields(fields) {
   const res = await fetch(`${KAIROS_BASE}/api/autofill-map`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
     cache: "no-store",
     body: JSON.stringify({ fields }),
   });
+  if (res.status === 401) throw new Error("token_required");
   if (!res.ok) throw new Error(`map ${res.status}`);
   return res.json(); // { mappings: [{id, value}] }
 }

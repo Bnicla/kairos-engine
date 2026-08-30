@@ -1,7 +1,7 @@
 import { auth } from "../auth";
 import { DriveStore } from "../store/drive";
 import { driveCacheFor } from "../store/user-cache";
-import { decryptSecret, encryptSecret, maskSecret } from "./crypto";
+import { decryptSecretDetailed, encryptSecret, maskSecret } from "./crypto";
 
 /**
  * Per-request context (DEC-5: everything in memory, nothing persisted our side).
@@ -63,5 +63,15 @@ export async function getAnthropicKeyMasked(store: DriveStore): Promise<string |
 /** Decrypt the key for an API call. Never log, never return to the client. */
 export async function getAnthropicKey(store: DriveStore): Promise<string | null> {
   const record = await store.readJson<StoredKey>(KEY_PATH);
-  return record ? decryptSecret(record.enc) : null;
+  if (!record) return null;
+  const { plaintext, needsReencrypt } = decryptSecretDetailed(record.enc);
+  if (needsReencrypt) {
+    // Lazy rotation: the ciphertext was made under a non-primary (or legacy)
+    // key; rewrite it under the current primary so old keys can be retired.
+    // Best-effort — a failed write just means we rotate on a later read.
+    await store
+      .writeJson(KEY_PATH, { enc: encryptSecret(plaintext), masked: record.masked } satisfies StoredKey)
+      .catch(() => {});
+  }
+  return plaintext;
 }

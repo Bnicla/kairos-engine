@@ -96,3 +96,87 @@ describe("checkAtsCoverage", () => {
     expect(bad.coverage).toBeLessThan(0.2);
   });
 });
+
+describe("checkResumeGrounding — source-bound metrics (REQ-3)", () => {
+  const kb = [
+    kbExp("Acme", "- Delivered $20M in savings. [R]", "01-acme.md"),
+    kbExp("Globex", "- Improved accuracy 40%. [R]", "02-globex.md"),
+  ];
+  const twoCompanyResume = (acmeBullets: string[], globexBullets: string[]): GeneratedResume => ({
+    resume: {
+      header: { name: "A", contact: "b" },
+      executive_summary: "Product leader.",
+      experience: [
+        { company: "Acme", title: "PM", dates: "2020 – 2022", bullets: acmeBullets },
+        { company: "Globex", title: "PM", dates: "2018 – 2020", bullets: globexBullets },
+      ],
+      education: [],
+      skills: [],
+    },
+    provenance_audit: [
+      { claim: "x", source_experience: "01-acme", prov: "R" },
+      { claim: "y", source_experience: "02-globex", prov: "R" },
+    ],
+  });
+
+  it("passes when each section's metrics come from its own experience", () => {
+    expect(
+      checkResumeGrounding(twoCompanyResume(["Delivered $20M in savings."], ["Improved accuracy 40%."]), kb),
+    ).toEqual([]);
+  });
+
+  it("flags a true metric recombined under the wrong employer", () => {
+    // 40% is real (Globex) but claimed under Acme: corpus-wide grounding passes,
+    // source binding must fail.
+    const issues = checkResumeGrounding(
+      twoCompanyResume(["Improved accuracy 40% at massive scale."], ["Improved accuracy 40%."]),
+      kb,
+    );
+    const kinds = issues.map((i) => i.kind);
+    expect(kinds).toContain("metric_source_mismatch");
+    expect(kinds).not.toContain("ungrounded_metric");
+    expect(issues.find((i) => i.kind === "metric_source_mismatch")?.detail).toContain("Acme");
+  });
+
+  it("lets the executive summary aggregate metrics across experiences", () => {
+    const gen = twoCompanyResume(["Delivered $20M in savings."], ["Improved accuracy 40%."]);
+    gen.resume.executive_summary = "Delivered $20M in savings and improved accuracy 40%.";
+    expect(checkResumeGrounding(gen, kb)).toEqual([]);
+  });
+
+  it("grounds section metrics from extraCorpus (profile/education facts)", () => {
+    const gen = twoCompanyResume(["Delivered $20M in savings while teaching 120+ students."], []);
+    expect(checkResumeGrounding(gen, kb, "Guest lecturer for 120+ students. [R]")).toEqual([]);
+  });
+});
+
+describe("extractMetricTokens — edge cases (REQ-3)", () => {
+  const raws = (s: string) => extractMetricTokens(s).map((t) => t.raw);
+
+  it("keeps 1,200 and $1.2M distinct (no cross-grounding via normalization)", () => {
+    const tokens = extractMetricTokens("Handled 1,200 tickets and $1.2M budget.");
+    const normals = tokens.map((t) => t.normalized);
+    expect(normals).toContain("1,200".toLowerCase().replace(/[,\s]/g, ""));
+    expect(normals.filter((n) => n === "1200").length).toBe(1);
+    expect(normals.some((n) => n.includes("$1.2m"))).toBe(true);
+  });
+
+  it("keeps 40+ and 40% as different claims", () => {
+    const normals = extractMetricTokens("Ran 40+ teams at 40% margin.").map((t) => t.normalized);
+    expect(normals).toContain("40+");
+    expect(normals).toContain("40%");
+  });
+
+  it("treats comma-numbers at the year boundary correctly", () => {
+    expect(raws("Shipped 1,899 units and 2,100 units.")).toEqual(
+      expect.arrayContaining(["1,899", "2,100"]),
+    );
+    // 2,050 normalizes to a plausible year and is excluded by the year guard.
+    expect(raws("Since 2,050 units")).toEqual([]);
+  });
+
+  it("excludes tenure phrases but keeps bare N+ claims", () => {
+    expect(raws("15+ years of experience")).toEqual([]);
+    expect(raws("supported 15+ teams")).toContain("15+");
+  });
+});

@@ -1,3 +1,32 @@
 {
-  "extends": "./apps/local/tsconfig.json"
+  // Solution-style root: the real projects live in packages/engine, apps/local,
+  // and apps/cloud (each with its own tsconfig; `npm run typecheck` checks all
+  // three). The compilerOptions below exist ONLY so root-level tooling (vitest,
+  // editors opening tests/) resolves the @kairos/engine and @/ aliases; they
+  // deliberately mirror apps/local's settings.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowJs": true,
+    "jsx": "preserve",
+    "paths": {
+      "@/*": ["./apps/local/*"],
+      "@kairos/engine/*": ["./packages/engine/*"]
+    }
+  },
+  "references": [
+    { "path": "./packages/engine" },
+    { "path": "./apps/local" },
+    { "path": "./apps/cloud" }
+  ],
+  "files": [],
+  "include": ["tests/**/*.ts"]
 }

@@ -16,6 +16,8 @@ export interface AutofillJson {
   links?: Record<string, string>;
   work_authorization?: Record<string, unknown>;
   eeo?: Record<string, string>;
+  /** EEO/demographic data is served ONLY when this is explicitly true. */
+  share_eeo?: boolean;
   common_answers?: Record<string, string>;
   defaults?: Record<string, unknown>;
 }
@@ -28,11 +30,51 @@ export function corsHeaders(req: NextRequest): Record<string, string> {
     return {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, X-Kairos-Token",
       Vary: "Origin",
     };
   }
   return { Vary: "Origin" };
+}
+
+/**
+ * Shared-token auth for the autofill endpoints (defense against DNS rebinding
+ * and other local processes: CORS only constrains browsers, and the profile
+ * endpoint serves contact/address/work-authorization data). The token lives at
+ * ~/Kairos/.secrets/autofill-token, generated on first use; the extension sends
+ * it as X-Kairos-Token after a one-time paste in its popup settings.
+ */
+export async function getOrCreateAutofillToken(store: Store): Promise<string> {
+  const path = [".secrets", "autofill-token"];
+  const existing = (await store.readFile(path).catch(() => null))?.trim();
+  if (existing) return existing;
+  const { randomBytes } = await import("node:crypto");
+  const token = randomBytes(32).toString("hex");
+  await store.writeFile(path, token);
+  return token;
+}
+
+const ALLOWED_HOSTS = new Set(["localhost:3000", "127.0.0.1:3000", "localhost", "127.0.0.1"]);
+
+/** Null when the request is authorized; otherwise an error message + status. */
+export async function rejectUnauthorized(
+  req: NextRequest,
+  store: Store,
+): Promise<{ status: number; message: string } | null> {
+  const host = (req.headers.get("host") ?? "").toLowerCase();
+  if (!ALLOWED_HOSTS.has(host)) {
+    return { status: 403, message: "Bad Host header." };
+  }
+  const token = await getOrCreateAutofillToken(store);
+  const sent = req.headers.get("x-kairos-token") ?? "";
+  if (sent !== token) {
+    return {
+      status: 401,
+      message:
+        "Missing or invalid X-Kairos-Token. Paste the token from ~/Kairos/.secrets/autofill-token into the extension's settings.",
+    };
+  }
+  return null;
 }
 
 type Store = ReturnType<typeof getStore>;
@@ -82,7 +124,9 @@ export async function buildAutofillProfile(store: Store) {
     address: autofill?.address ?? {},
     links: autofill?.links ?? {},
     work_authorization: autofill?.work_authorization ?? {},
-    eeo: autofill?.eeo ?? {},
+    // EEO/demographics are the most sensitive category here: served only on
+    // explicit opt-in ("share_eeo": true in autofill.json).
+    eeo: autofill?.share_eeo === true ? (autofill?.eeo ?? {}) : {},
     common_answers: autofill?.common_answers ?? {},
     defaults: autofill?.defaults ?? { never_auto_submit: true },
     work_history,

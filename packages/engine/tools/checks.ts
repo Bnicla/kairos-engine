@@ -145,7 +145,7 @@ export function checkAtsCoverage(jobText: string, resumeText: string): AtsCovera
 // --- Grounding (anti-fabrication, mechanical) --------------------------------
 
 export interface GroundingIssue {
-  kind: "unknown_employer" | "ungrounded_metric" | "unknown_source";
+  kind: "unknown_employer" | "ungrounded_metric" | "unknown_source" | "metric_source_mismatch";
   detail: string;
 }
 
@@ -154,8 +154,14 @@ export interface GroundingIssue {
  *  - every experience employer must be a KB experience company
  *  - every metric token in bullets/summaries must appear in the stripped
  *    ([?]-free) KB corpus — a metric the KB doesn't contain cannot ship
+ *  - every metric inside an EXPERIENCE SECTION must additionally appear in the
+ *    stripped text of THAT experience (source-bound: a real "40%" from company A
+ *    cannot ground a "40%" claim written under company B — recombining true
+ *    numbers into false claims is fabrication too). The executive summary stays
+ *    corpus-wide, because it legitimately aggregates across roles.
  *  - every provenance_audit.source_experience must name a real KB file
- * `extraCorpus` admits curated non-experience sources (profile, education).
+ * `extraCorpus` admits curated non-experience sources (profile, education) and
+ * also grounds section-level metrics (a summary line may cite profile facts).
  */
 export function checkResumeGrounding(
   gen: GeneratedResume,
@@ -165,9 +171,15 @@ export function checkResumeGrounding(
   const issues: GroundingIssue[] = [];
   const companies = new Set(experiences.map((e) => e.frontmatter.company.toLowerCase().trim()));
   const fileNames = new Set(experiences.map((e) => e.fileName.replace(/\.md$/, "")));
-  const corpus = normalizeMetrics(
-    experiences.map((e) => serializeExperience(stripUnverified(e))).join("\n") + "\n" + extraCorpus,
-  );
+  const strippedByCompany = new Map<string, string>();
+  for (const e of experiences) {
+    const key = e.frontmatter.company.toLowerCase().trim();
+    const text = normalizeMetrics(serializeExperience(stripUnverified(e)));
+    // Two KB entries for the same employer merge (e.g. two roles at one company).
+    strippedByCompany.set(key, (strippedByCompany.get(key) ?? "") + "\n" + text);
+  }
+  const extra = normalizeMetrics(extraCorpus);
+  const corpus = [...strippedByCompany.values()].join("\n") + "\n" + extra;
 
   for (const exp of gen.resume.experience) {
     if (!companies.has(exp.company.toLowerCase().trim())) {
@@ -175,6 +187,7 @@ export function checkResumeGrounding(
     }
   }
 
+  // Corpus-wide pass: a metric found NOWHERE in verified evidence is fabricated.
   const prose = [
     gen.resume.executive_summary,
     ...gen.resume.experience.flatMap((e) => [e.summary ?? "", ...e.bullets]),
@@ -182,6 +195,24 @@ export function checkResumeGrounding(
   for (const token of extractMetricTokens(prose)) {
     if (!corpus.includes(token.normalized)) {
       issues.push({ kind: "ungrounded_metric", detail: `"${token.raw}" not found in any verified KB fact` });
+    }
+  }
+
+  // Source-bound pass: within each experience section, metrics must come from
+  // THAT experience (or the curated extraCorpus). Skip sections whose employer
+  // is unknown — that already failed harder above.
+  for (const exp of gen.resume.experience) {
+    const own = strippedByCompany.get(exp.company.toLowerCase().trim());
+    if (own === undefined) continue;
+    const sectionText = [exp.summary ?? "", ...exp.bullets].join("\n");
+    for (const token of extractMetricTokens(sectionText)) {
+      if (!corpus.includes(token.normalized)) continue; // already reported as ungrounded_metric
+      if (!own.includes(token.normalized) && !extra.includes(token.normalized)) {
+        issues.push({
+          kind: "metric_source_mismatch",
+          detail: `"${token.raw}" under "${exp.company}" is not in that experience's verified facts (it exists elsewhere in the KB — a true number from one role cannot support a claim in another)`,
+        });
+      }
     }
   }
 

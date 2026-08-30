@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/store";
 import { runClaude } from "@/lib/claude-cli";
-import { buildAutofillProfile, corsHeaders } from "@/lib/autofill";
+import { buildAutofillProfile, corsHeaders, rejectUnauthorized } from "@/lib/autofill";
 
 export const dynamic = "force-dynamic";
 // One Claude call maps the whole form; allow room for a cold CLI start.
@@ -75,11 +75,14 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "bad request" }, { status: 400, headers: corsHeaders(req) });
   }
+  const store = getStore();
+  const denied = await rejectUnauthorized(req, store);
+  if (denied) {
+    return NextResponse.json({ error: denied.message }, { status: denied.status, headers: corsHeaders(req) });
+  }
   if (fields.length === 0) {
     return NextResponse.json({ mappings: [] }, { headers: corsHeaders(req) });
   }
-
-  const store = getStore();
   const profile = await buildAutofillProfile(store);
   // The extension never needs the résumé list for mapping; drop it to keep the
   // prompt lean and avoid leaking application history into the field-map call.

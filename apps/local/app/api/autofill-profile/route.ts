@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/store";
-import { buildAutofillProfile, corsHeaders } from "@/lib/autofill";
+import { buildAutofillProfile, corsHeaders, rejectUnauthorized } from "@/lib/autofill";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +19,10 @@ export function OPTIONS(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const store = getStore();
+  const denied = await rejectUnauthorized(req, store);
+  if (denied) {
+    return NextResponse.json({ error: denied.message }, { status: denied.status, headers: corsHeaders(req) });
+  }
   const profile = await buildAutofillProfile(store);
   return NextResponse.json(profile, { headers: corsHeaders(req) });
 }

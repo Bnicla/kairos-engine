@@ -83,7 +83,12 @@ async function init() {
     if (!resp?.ok) throw new Error(resp?.error || "no response");
     PROFILE = resp.profile;
   } catch (e) {
-    setStatus("Can't reach Kairos at localhost:3000.\nIs the local dashboard running?\n\n(" + e.message + ")", "err");
+    if (String(e.message).includes("token_required")) {
+      $("tokenBox").style.display = "block";
+      setStatus("Kairos requires a one-time token.\nPaste it below (see the path shown), then reopen this popup.", "warn");
+    } else {
+      setStatus("Can't reach Kairos at localhost:3000.\nIs the local dashboard running?\n\n(" + e.message + ")", "err");
+    }
     return;
   }
 
@@ -156,9 +161,10 @@ $("generate").addEventListener("click", async () => {
   $("generate").disabled = true;
   setStatus(`Capturing ${JOB.company} and starting a tailored résumé…`, "");
   try {
+    const { kairosToken } = await chrome.storage.local.get("kairosToken");
     const r = await fetch("http://localhost:3000/api/autofill-generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(kairosToken ? { "X-Kairos-Token": kairosToken } : {}) },
       body: JSON.stringify({ url: JOB.url, company: JOB.company, title: JOB.title || JOB.company, text: JOB.text }),
     });
     const j = await r.json();
@@ -168,6 +174,15 @@ $("generate").addEventListener("click", async () => {
     setStatus("Couldn't start generation.\n(" + e.message + ")", "err");
     $("generate").disabled = false;
   }
+});
+
+$("saveToken").addEventListener("click", async () => {
+  const token = $("token").value.trim();
+  if (!token) return;
+  await chrome.storage.local.set({ kairosToken: token });
+  $("tokenBox").style.display = "none";
+  setStatus("Token saved. Reconnecting…", "ok");
+  init();
 });
 
 init();
