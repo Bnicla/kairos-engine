@@ -23,6 +23,7 @@ import {
 import { markdownLetterToDocx } from "@kairos/engine/docx-render";
 import { checkStyle, isHardStyleViolation } from "@kairos/engine/tools/checks";
 import { resolveStylePolicy, type StylePolicy } from "@kairos/engine/tools/checks";
+import { tracedFinalMessage } from "./tracing";
 
 /** Load the user's optional style policy from their Drive (REQ-14); defaults to house rules. */
 export async function loadStylePolicy(store: { readJson: <T>(p: string[]) => Promise<T | null> }): Promise<StylePolicy> {
@@ -43,7 +44,9 @@ import { ClaudeUserError, parseJsonBlock, toUserError } from "./claude";
 
 const MODEL = TASK_MODELS.scoring.id;
 
-async function callJson<T>(client: Anthropic, system: string, messages: Anthropic.MessageParam[]): Promise<{ parsed: T | null; raw: string }> {
+type TraceCtx = { store: { readJson<T2>(p: string[]): Promise<T2 | null>; writeJson(p: string[], v: unknown): Promise<unknown> }; task: string; appId?: string } | null;
+
+async function callJson<T>(client: Anthropic, system: string, messages: Anthropic.MessageParam[], trace: TraceCtx = null): Promise<{ parsed: T | null; raw: string }> {
   let message: Anthropic.Message;
   try {
     const stream = client.messages.stream({
@@ -53,7 +56,7 @@ async function callJson<T>(client: Anthropic, system: string, messages: Anthropi
       system,
       messages,
     });
-    message = await stream.finalMessage();
+    message = await tracedFinalMessage(trace?.store ?? null, trace?.task ?? "unknown", trace?.appId, stream);
   } catch (err) {
     toUserError(err);
   }
@@ -102,7 +105,7 @@ export async function runScoringForApp(
 
   // One repair round: if the report fails the zod gate, feed the exact issues back.
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { parsed, raw } = await callJson<ScoreReport>(client, SCORING_SYSTEM_PROMPT, messages);
+    const { parsed, raw } = await callJson<ScoreReport>(client, SCORING_SYSTEM_PROMPT, messages, { store, task: "scoring", appId });
     if (parsed) {
       try {
         await saveScoredReport(store, appId, "Score", parsed);
@@ -195,7 +198,7 @@ export async function runGenerationForApp(
   // exact findings and let it repair — same loop the local driver runs by hand.
   let lastError = "";
   for (let attempt = 0; attempt < 3; attempt++) {
-    const { parsed, raw } = await callJson<GeneratedResume>(client, GENERATION_SYSTEM_PROMPT, messages);
+    const { parsed, raw } = await callJson<GeneratedResume>(client, GENERATION_SYSTEM_PROMPT, messages, { store, task: "generation", appId });
     if (!parsed) {
       lastError = "not valid JSON";
       messages.push(
@@ -301,7 +304,7 @@ export async function runCoverLetterForApp(
         system: COVER_LETTER_SYSTEM_PROMPT,
         messages,
       });
-      message = await stream.finalMessage();
+      message = await tracedFinalMessage(store, "cover_letter", appId, stream);
     } catch (err) {
       toUserError(err);
     }

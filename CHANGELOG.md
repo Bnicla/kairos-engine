@@ -4,6 +4,21 @@ Work lands as scoped commits with descriptive messages, not squashes of weeks.
 (The public repo's initial commit is a deliberate exception: 91 private commits
 were withheld for privacy, snapshotted, and scrubbed — see the README note.)
 
+## 2026-08-30 — Reviewer wishlist: ADRs, red team, tier-2 evals, cost tracing
+
+- **docs/adr/**: five decision records (hand-rolled agent loop; deterministic
+  gates over LLM judges at write time; attribution over sanitization; the
+  provenance memory model; task-keyed model routing + cost).
+- **Injection red-team corpus** (tier 1, CI): 21 cases across the known attack
+  families; 14/14 attacks blocked, 6/6 legitimate saves admitted, 1 boundary
+  rejection pinned as an accepted cost.
+- **Tier-2 runners**: `eval:scoring` (5 fixture ads vs a student-persona KB,
+  band-level expectations) and `eval:generation` (score → generate → the real
+  guarded save path with findings-fed retry); CLI or API providers.
+- **Cost tracing**: cloud SDK calls emit spans (tokens, latency, dollars from
+  a dated price table) to the user's own store; `eval:costs` reports totals
+  and per-application cost. Local CLI lane documented as flat-rate/untraced.
+
 ## 2026-08-30 — Outcome calibration eval (REQ-13 tier 3)
 
 - `npm run eval:calibration`: the scorer judged against reality — predicted

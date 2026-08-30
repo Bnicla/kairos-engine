@@ -12,6 +12,7 @@ import type { ScoreReport } from "@kairos/engine/types";
 import { loadQAIndex, readQA, upsertQA } from "@kairos/engine/qabank";
 import { checkStyle, isHardStyleViolation } from "@kairos/engine/tools/checks";
 import { loadStylePolicy } from "./apps-agent";
+import { tracedFinalMessage } from "./tracing";
 import { checkAttribution } from "@kairos/engine/tools/attribution";
 import { ClaudeUserError, toUserError } from "./claude";
 import { resolveModel } from "./models";
@@ -205,7 +206,7 @@ export async function runTailorTurn(
         if (replyParts.length > 0) emit.delta("\n\n");
         stream.on("text", (d) => emit.delta!(d));
       }
-      const response = await stream.finalMessage();
+      const response = await tracedFinalMessage(store, "tailor_turn", appId, stream);
 
       for (const block of response.content) {
         if (block.type === "text" && block.text.trim()) replyParts.push(block.text.trim());

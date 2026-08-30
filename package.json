@@ -14,7 +14,10 @@
     "mcp": "npm -w kairos-local run mcp",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p packages/engine && tsc --noEmit -p apps/local && tsc --noEmit -p apps/cloud",
-    "eval:calibration": "tsx evals/run-calibration.mts"
+    "eval:calibration": "tsx evals/run-calibration.mts",
+    "eval:scoring": "tsx evals/run-scoring.mts",
+    "eval:generation": "tsx evals/run-generation.mts",
+    "eval:costs": "tsx evals/run-costs.mts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

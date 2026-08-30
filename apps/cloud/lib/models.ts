@@ -53,6 +53,23 @@ export interface TaskModel {
   adaptiveThinking: boolean;
 }
 
+/**
+ * List prices per million tokens (USD), for cost tracing. Prices drift —
+ * `asOf` is part of the data, and spans store computed cost at call time so
+ * historical spans stay honest even after a price change.
+ */
+export const MODEL_PRICES: Record<string, { inPerM: number; outPerM: number; asOf: string }> = {
+  "claude-opus-4-8": { inPerM: 5, outPerM: 25, asOf: "2026-08-30" },
+  "claude-sonnet-5": { inPerM: 3, outPerM: 15, asOf: "2026-08-30" },
+  "claude-haiku-4-5": { inPerM: 1, outPerM: 5, asOf: "2026-08-30" },
+};
+
+export function costUsd(model: string, inputTokens: number, outputTokens: number): number | null {
+  const p = MODEL_PRICES[model];
+  if (!p) return null;
+  return (inputTokens * p.inPerM + outputTokens * p.outPerM) / 1_000_000;
+}
+
 export const TASK_MODELS = {
   /** Résumé-PDF → knowledge-base extraction (long output, quality-critical). */
   extraction: { id: "claude-opus-4-8", maxTokens: 32_000, adaptiveThinking: true },

@@ -38,6 +38,8 @@ Reasoning runs through Claude (Claude Code + MCP locally; a server-side agent lo
 - **Fail loudly.** Job-site adapters break weekly; every failure surfaces in the UI rather than silently degrading.
 - **Human-in-the-loop where it counts.** Never submits an application, never writes an unconfirmed fact, never sends an email.
 
+Why it is built this way — framework-free agent loop, deterministic gates over LLM judges, attribution over sanitization, provenance memory, model routing — is written down in five decision records under `docs/adr/`. The anti-injection guard is red-teamed in CI against a 21-case corpus (`evals/injection-corpus.ts`): currently **14/14 attacks blocked, 6/6 legitimate saves admitted**, with the guard's one deliberate strictness boundary pinned as an accepted cost rather than hidden.
+
 ## Does the scorer actually predict anything?
 
 The eval that cannot be faked: every application records the band the scorer
