@@ -452,6 +452,11 @@ are amended:
    container.** LibreOffice is now load-bearing twice (probe + deliverable);
    serverless-without-it would regress shipped quality. Treat DEC-4 as resolved
    to container unless something changes.
+   **REQ-8 decision (2026-08-28, Option B for now):** the cloud lane as
+   currently deployed (Vercel) is **docx-only** — download allowlist and README
+   say so explicitly, and the layout probe is documented as local-lane. Option A
+   (a Gotenberg-style render container, restoring PDF + probe parity) is the
+   planned end state, folded into the container migration above.
 5. **Dream-company watcher** (`apps/cloud/scripts/dream-watch.mts`): direct
    career-API monitoring (Google HTML-embed parsing, Greenhouse/Ashby/Lever
    APIs) for user-designated priority companies, diffed daily. Cloud-ready as a

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { TASK_MODELS } from "./models";
 import {
   EXTRACTION_SYSTEM_PROMPT,
   buildExtractionUserMessage,
@@ -22,9 +23,9 @@ export async function extractKnowledgeBase(
   let message: Anthropic.Message;
   try {
     const stream = client.messages.stream({
-      model: "claude-opus-4-8",
-      max_tokens: 32000,
-      thinking: { type: "adaptive" },
+      model: TASK_MODELS.extraction.id,
+      max_tokens: TASK_MODELS.extraction.maxTokens,
+      ...(TASK_MODELS.extraction.adaptiveThinking ? { thinking: { type: "adaptive" as const } } : {}),
       system: EXTRACTION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildExtractionUserMessage(resumeText) }],
     });

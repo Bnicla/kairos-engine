@@ -107,6 +107,17 @@ const result = await runSourcingSweep({
 
 writeFileSync(join(OUT_DIR, "last-run.json"), JSON.stringify(result, null, 1));
 
+if (result.fetch_stats) {
+  const s = result.fetch_stats;
+  const hard = s.boards_failed + s.rate_limited;
+  console.log(
+    `▸ Fetch: ${s.boards_ok} ok · ${s.boards_gone} gone (registry decay) · ${s.boards_failed} failed · ${s.rate_limited} rate-limited`,
+  );
+  if (hard > 0 && hard / (s.boards_ok + s.boards_gone + hard) > 0.05) {
+    console.error(`⚠️  FETCH DEGRADED — results may be incomplete. Failures by ATS: ${JSON.stringify(s.failures_by_ats)}`);
+  }
+}
+
 if (result.triage_error) {
   const authExpired = /auth|oauth|expired|authenticate/i.test(result.triage_error);
   console.error(

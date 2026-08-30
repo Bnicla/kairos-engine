@@ -58,6 +58,14 @@ export interface SourcedRun {
   triaged?: boolean;
   /** Non-null when triage failed (e.g. expired CLI auth) — surface as a warning. */
   triage_error?: string | null;
+  /** Board fetch accounting; warn when failures are material (REQ-6). */
+  fetch_stats?: {
+    boards_ok: number;
+    boards_gone: number;
+    boards_failed: number;
+    rate_limited: number;
+    failures_by_ats: Record<string, number>;
+  };
   survivors: SourcedPosting[];
   stretch: SourcedPosting[];
   /** Prefilter survivors that did not reach the board (view-all page). */

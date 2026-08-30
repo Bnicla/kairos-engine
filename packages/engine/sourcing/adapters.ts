@@ -9,17 +9,58 @@ import type { Posting, RegistryEntry, SourcingAts } from "./types";
 
 const TIMEOUT_MS = 12_000;
 
-async function getJson(url: string, init?: RequestInit): Promise<unknown | null> {
-  try {
-    const res = await fetch(url, {
-      ...init,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { accept: "application/json", "user-agent": "kairos-sourcing/1.0", ...(init?.headers ?? {}) },
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+/**
+ * Typed fetch outcomes (REQ-6). A rate-limit event must be distinguishable from
+ * "board has no jobs": swallowing errors made a throttled sweep look like a
+ * quiet market. "gone" (404/410) is registry decay, not infrastructure failure —
+ * accounted separately so the failure banner doesn't cry wolf on stale slugs.
+ */
+export type FetchFailureKind = "http" | "gone" | "rate_limited" | "timeout" | "network" | "parse";
+
+export class BoardFetchError extends Error {
+  constructor(
+    public kind: FetchFailureKind,
+    public status?: number,
+  ) {
+    super(`board fetch failed: ${kind}${status ? ` (${status})` : ""}`);
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function getJson(url: string, init?: RequestInit): Promise<unknown> {
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+        headers: { accept: "application/json", "user-agent": "kairos-sourcing/1.0", ...(init?.headers ?? {}) },
+      });
+    } catch (err) {
+      const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+      throw new BoardFetchError(timedOut ? "timeout" : "network");
+    }
+    if (res.ok) {
+      try {
+        return await res.json();
+      } catch {
+        throw new BoardFetchError("parse", res.status);
+      }
+    }
+    // One retry with backoff + jitter on throttle/transient statuses, honoring
+    // Retry-After when the host names a wait (capped so a sweep can't stall).
+    if ((res.status === 429 || res.status === 500 || res.status === 502 || res.status === 503) && attempt === 0) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const wait = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 5_000)
+        : 500 + Math.random() * 700;
+      await sleep(wait);
+      continue;
+    }
+    if (res.status === 404 || res.status === 410) throw new BoardFetchError("gone", res.status);
+    if (res.status === 429) throw new BoardFetchError("rate_limited", res.status);
+    throw new BoardFetchError("http", res.status);
   }
 }
 
@@ -211,6 +252,25 @@ const ADAPTERS: Record<SourcingAts, (slug: string, now: number) => Promise<Posti
   workday: fetchWorkday,
 };
 
+export interface BoardFetchResult {
+  postings: Posting[];
+  /** Present when the board could not be read; postings is then []. */
+  failure?: { kind: FetchFailureKind; status?: number };
+}
+
+/** Fetch one board with a typed outcome — failures are reported, never swallowed. */
+export async function fetchBoardDetailed(entry: RegistryEntry, now = Date.now()): Promise<BoardFetchResult> {
+  try {
+    return { postings: await ADAPTERS[entry.ats](entry.slug, now) };
+  } catch (err) {
+    if (err instanceof BoardFetchError) {
+      return { postings: [], failure: { kind: err.kind, status: err.status } };
+    }
+    return { postings: [], failure: { kind: "network" } };
+  }
+}
+
+/** Back-compat form: failures resolve to []. Prefer fetchBoardDetailed. */
 export async function fetchBoard(entry: RegistryEntry, now = Date.now()): Promise<Posting[]> {
-  return ADAPTERS[entry.ats](entry.slug, now);
+  return (await fetchBoardDetailed(entry, now)).postings;
 }

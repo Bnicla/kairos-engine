@@ -6,7 +6,7 @@
  * criteria live here — the SearchProfile is data, loaded per user.
  */
 
-import { fetchBoard } from "./adapters";
+import { fetchBoardDetailed, type FetchFailureKind } from "./adapters";
 import { prefilterAndRank } from "./filter";
 import { applyTriage, buildTriagePrompt, parseTriageResponse, type TriageVerdict } from "./triage";
 import type { Posting, RankedPosting, RegistryEntry, SearchProfile } from "./types";
@@ -25,6 +25,13 @@ export interface SweepInput {
   triage?: (prompt: string) => Promise<string>;
   maxBoards?: number;
   concurrency?: number;
+  /**
+   * Per-ATS worker caps. Boards of one ATS mostly resolve to ONE shared host
+   * (every Greenhouse board is boards-api.greenhouse.io), so global concurrency
+   * alone hammers that host and earns 429s. Defaults are conservative for the
+   * shared hosts; Workday is per-tenant (each its own host) so it runs wider.
+   */
+  perAtsConcurrency?: Partial<Record<RegistryEntry["ats"], number>>;
   onProgress?: (done: number, total: number, postings: number) => void;
   /** Diagnostics channel (e.g. why triage fell back). Silent-swallow is worse. */
   onLog?: (message: string) => void;
@@ -47,6 +54,19 @@ export interface SweepResultFile {
    * have surfaced. null/absent = triage ran (or was never requested).
    */
   triage_error?: string | null;
+  /**
+   * Board fetch accounting (REQ-6): a throttled or failing sweep must be
+   * distinguishable from a quiet market. "gone" = 404/410 registry decay
+   * (normal); "failed" = timeouts, network, 5xx, parse; "rate_limited" = 429s
+   * that survived the retry. The UI warns when failed+rate_limited is material.
+   */
+  fetch_stats?: {
+    boards_ok: number;
+    boards_gone: number;
+    boards_failed: number;
+    rate_limited: number;
+    failures_by_ats: Record<string, number>;
+  };
   profile: SearchProfile;
   survivors: RankedPosting[];
   stretch: RankedPosting[];
@@ -90,23 +110,63 @@ export async function runSourcingSweep(input: SweepInput): Promise<SweepResultFi
 
   const all: Posting[] = [];
   let done = 0;
-  const queue = [...boards];
+  const stats = {
+    boards_ok: 0,
+    boards_gone: 0,
+    boards_failed: 0,
+    rate_limited: 0,
+    failures_by_ats: {} as Record<string, number>,
+  };
+  const account = (ats: string, failure?: { kind: FetchFailureKind }) => {
+    if (!failure) stats.boards_ok++;
+    else if (failure.kind === "gone") stats.boards_gone++;
+    else {
+      if (failure.kind === "rate_limited") stats.rate_limited++;
+      else stats.boards_failed++;
+      stats.failures_by_ats[ats] = (stats.failures_by_ats[ats] ?? 0) + 1;
+    }
+  };
+
+  // One queue per ATS, each with its own worker cap (shared hosts stay gentle),
+  // all running concurrently up to the global budget.
+  const PER_ATS_DEFAULT: Record<string, number> = {
+    greenhouse: 6,
+    lever: 6,
+    ashby: 6,
+    rippling: 4,
+    workday: 12,
+  };
+  const byAts = new Map<string, RegistryEntry[]>();
+  for (const b of boards) {
+    (byAts.get(b.ats) ?? byAts.set(b.ats, []).get(b.ats)!).push(b);
+  }
   await Promise.all(
-    Array.from({ length: concurrency }, async () => {
-      for (;;) {
-        const entry = queue.shift();
-        if (!entry) return;
-        try {
-          all.push(...(await fetchBoard(entry)));
-        } catch {
-          /* dead board — registry self-cleans at harvest time */
+    [...byAts.entries()].flatMap(([ats, queue]) => {
+      const workers = Math.min(
+        input.perAtsConcurrency?.[ats as RegistryEntry["ats"]] ?? PER_ATS_DEFAULT[ats] ?? 4,
+        concurrency,
+      );
+      return Array.from({ length: workers }, async () => {
+        for (;;) {
+          const entry = queue.shift();
+          if (!entry) return;
+          const { postings, failure } = await fetchBoardDetailed(entry);
+          all.push(...postings);
+          account(ats, failure);
+          done++;
+          if (done % 100 === 0) input.onProgress?.(done, boards.length, all.length);
         }
-        done++;
-        if (done % 100 === 0) input.onProgress?.(done, boards.length, all.length);
-      }
+      });
     }),
   );
   input.onProgress?.(done, boards.length, all.length);
+
+  const hardFailures = stats.boards_failed + stats.rate_limited;
+  if (boards.length > 0 && hardFailures / boards.length > 0.05) {
+    input.onLog?.(
+      `fetch degraded: ${hardFailures}/${boards.length} boards failed (${stats.rate_limited} rate-limited) — results may be incomplete. By ATS: ${JSON.stringify(stats.failures_by_ats)}`,
+    );
+  }
 
   // Greenhouse jobs surface under two hosts (job-boards.greenhouse.io and the
   // company careers page with ?gh_jid=) — dedupe tracked jobs by job id too.
@@ -180,6 +240,7 @@ export async function runSourcingSweep(input: SweepInput): Promise<SweepResultFi
     prefilter_stretch: stretch.length,
     triaged: finalMatches.triaged,
     triage_error: triageError,
+    fetch_stats: stats,
     profile: input.profile,
     survivors: finalMatches.list,
     stretch: finalStretch.list,

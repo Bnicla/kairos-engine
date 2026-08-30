@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { TASK_MODELS } from "./models";
 import type { DriveStore } from "../store/drive";
 import { createApplication } from "@kairos/engine/applications";
 import { ClaudeUserError, toUserError } from "./claude";
@@ -120,9 +121,9 @@ export async function runCaptureTurn(
   try {
     for (let i = 0; i < 5; i++) {
       const stream = client.messages.stream({
-        model: "claude-sonnet-5",
-        max_tokens: 8000,
-        thinking: { type: "adaptive" },
+        model: TASK_MODELS.capture.id,
+        max_tokens: TASK_MODELS.capture.maxTokens,
+        ...(TASK_MODELS.capture.adaptiveThinking ? { thinking: { type: "adaptive" as const } } : {}),
         system: SYSTEM,
         tools: TOOLS,
         messages,

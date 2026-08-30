@@ -39,3 +39,25 @@ export const DEFAULT_MODEL = "claude-sonnet-5";
 export function resolveModel(id: unknown): ModelOption {
   return MODEL_OPTIONS.find((m) => m.id === id) ?? MODEL_OPTIONS.find((m) => m.id === DEFAULT_MODEL)!;
 }
+
+/**
+ * Per-task defaults (REQ-10): the ONE registry for every model id and its
+ * token/thinking settings. No model id string literals belong anywhere else —
+ * drift between call sites and the picker is how billing surprises happen.
+ * Quality-load-bearing tasks (extraction, scoring, generation, letters) run on
+ * Opus regardless of the interactive picker; chat-style flows default cheaper.
+ */
+export interface TaskModel {
+  id: string;
+  maxTokens: number;
+  adaptiveThinking: boolean;
+}
+
+export const TASK_MODELS = {
+  /** Résumé-PDF → knowledge-base extraction (long output, quality-critical). */
+  extraction: { id: "claude-opus-4-8", maxTokens: 32_000, adaptiveThinking: true },
+  /** Honest scoring + résumé/letter generation (guarded save paths). */
+  scoring: { id: "claude-opus-4-8", maxTokens: 24_000, adaptiveThinking: true },
+  /** Job-ad capture chat (tool loop; speed matters more than depth). */
+  capture: { id: "claude-sonnet-5", maxTokens: 8_000, adaptiveThinking: true },
+} as const satisfies Record<string, TaskModel>;

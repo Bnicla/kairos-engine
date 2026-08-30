@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { TASK_MODELS } from "./models";
 import type { DriveStore } from "../store/drive";
 import { readMeta, readSnapshot, readScoreReport } from "@kairos/engine/applications";
 import {
@@ -33,7 +34,7 @@ import { ClaudeUserError, parseJsonBlock, toUserError } from "./claude";
  * of the enrichment picker.
  */
 
-const MODEL = "claude-opus-4-8";
+const MODEL = TASK_MODELS.scoring.id;
 
 async function callJson<T>(client: Anthropic, system: string, messages: Anthropic.MessageParam[]): Promise<{ parsed: T | null; raw: string }> {
   let message: Anthropic.Message;

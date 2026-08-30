@@ -92,6 +92,28 @@ export default async function SourcedPage() {
 
       {!run && <div className="text-muted rounded-lg border border-dashed border-[var(--border)] p-6 text-center text-sm">No sweep has run yet.</div>}
 
+      {(() => {
+        const s = run?.fetch_stats;
+        if (!s) return null;
+        const total = s.boards_ok + s.boards_gone + s.boards_failed + s.rate_limited;
+        const hard = s.boards_failed + s.rate_limited;
+        if (!total || hard / total <= 0.05) return null;
+        return (
+          <div className="mb-4 rounded-lg border p-3 text-xs" style={{ borderColor: "var(--warning-fg, #b45309)" }}>
+            <div className="font-semibold" style={{ color: "var(--warning-fg, #b45309)" }}>
+              ⚠ Sweep fetch was degraded — results may be incomplete
+            </div>
+            <p className="text-muted mt-1">
+              {hard} of {total} boards failed ({s.rate_limited} rate-limited
+              {Object.keys(s.failures_by_ats).length
+                ? `; by ATS: ${Object.entries(s.failures_by_ats).map(([k, v]) => `${k} ${v}`).join(", ")}`
+                : ""}
+              ). A throttled sweep can look like a quiet market — treat gaps with suspicion and re-run later.
+            </p>
+          </div>
+        );
+      })()}
+
       {run?.triage_error && (
         <div className="mb-4 rounded-lg border border-[var(--danger-fg)] bg-[var(--danger-bg,transparent)] p-3 text-xs" style={{ borderColor: "var(--danger-fg)" }}>
           <div className="font-semibold" style={{ color: "var(--danger-fg)" }}>⚠ Triage didn’t run — this list is unranked</div>
