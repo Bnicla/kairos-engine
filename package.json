@@ -13,7 +13,8 @@
     "start": "npm -w kairos-local run start",
     "mcp": "npm -w kairos-local run mcp",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p packages/engine && tsc --noEmit -p apps/local && tsc --noEmit -p apps/cloud"
+    "typecheck": "tsc --noEmit -p packages/engine && tsc --noEmit -p apps/local && tsc --noEmit -p apps/cloud",
+    "eval:calibration": "tsx evals/run-calibration.mts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -4,6 +4,17 @@ Work lands as scoped commits with descriptive messages, not squashes of weeks.
 (The public repo's initial commit is a deliberate exception: 91 private commits
 were withheld for privacy, snapshotted, and scrubbed — see the README note.)
 
+## 2026-08-30 — Outcome calibration eval (REQ-13 tier 3)
+
+- `npm run eval:calibration`: the scorer judged against reality — predicted
+  bands vs real interview conversion from the live application history, Wilson
+  95% intervals, pending censored + conservative rate published, withdrawn
+  censored as candidate-choice. Pure logic in `packages/engine/calibration.ts`
+  (10 unit tests); aggregate-only output (publishable, no pipeline leakage).
+- First published run (52 applied, 22 decided): band ordering MONOTONE —
+  STRONG 35% [17–59%] vs COMPETITIVE 0% [0–66%].
+- `evals/README.md` seeds the three-tier harness structure (REQ-13).
+
 ## 2026-08-30 — Reliability & hygiene batch (review REQ-7, 9, 14, 15, 18)
 
 - **Drive backoff (REQ-7):** every Drive call retries 429/5xx up to 3 attempts

@@ -38,6 +38,27 @@ Reasoning runs through Claude (Claude Code + MCP locally; a server-side agent lo
 - **Fail loudly.** Job-site adapters break weekly; every failure surfaces in the UI rather than silently degrading.
 - **Human-in-the-loop where it counts.** Never submits an application, never writes an unconfirmed fact, never sends an email.
 
+## Does the scorer actually predict anything?
+
+The eval that cannot be faked: every application records the band the scorer
+predicted before submission, and the market later supplies the label. A free
+runner (`npm run eval:calibration`) reads that history and reports conversion
+with Wilson 95% intervals, pending applications censored and also counted as
+failures in a conservative rate, withdrawn censored as candidate-choice.
+
+Latest published run (2026-08-30 · 52 applications submitted, 22 decided):
+
+| Predicted band | Applied | Interviews | Decided rate | 95% CI | Conservative |
+|---|---|---|---|---|---|
+| STRONG | 39 | 6 | **35%** | 17–59% | 16% |
+| COMPETITIVE | 6 | 0 | 0% | 0–66% | 0% |
+
+Band ordering is monotone: better-banded applications convert better. The
+intervals overlap because the sample is small, and the harness says so itself,
+small-sample honesty being enforced in code like everything else here. Method
+notes live in `packages/engine/calibration.ts`; the three-tier eval plan in
+`evals/README.md`.
+
 ## Author & license
 
 Designed and directed by **Boris Nicolas**, built with Claude as a pair — the architecture, gates, provenance model, prompts, and product decisions are mine.
