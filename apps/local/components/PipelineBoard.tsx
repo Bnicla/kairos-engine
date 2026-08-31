@@ -251,13 +251,17 @@ export default function PipelineBoard({
                         )}
                       </div>
                     )}
-                    {stage.key === "closed" && (
+                    {(stage.key === "closed" || stage.key === "draft") && (
                       <form action={archiveAction} className="mt-0.5 text-right">
                         <input type="hidden" name="id" value={a.id} />
                         <input type="hidden" name="archived" value="1" />
                         <button
                           className="text-muted cursor-pointer text-[11px] underline hover:text-[color:var(--foreground)]"
-                          title="Move to the archive (nothing is deleted)"
+                          title={
+                            stage.key === "draft"
+                              ? "Not relevant after all: move to the archive (nothing is deleted; restore any time)"
+                              : "Move to the archive (nothing is deleted)"
+                          }
                         >
                           Archive
                         </button>

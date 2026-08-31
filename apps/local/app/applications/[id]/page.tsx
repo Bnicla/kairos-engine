@@ -100,7 +100,7 @@ export default async function ApplicationPage({ params }: { params: Promise<{ id
         <div className="border-border my-4 border-t" />
 
         <div className="flex flex-wrap items-center gap-4">
-          {(STATUS_META[meta.status]?.stage === "closed" || meta.archived) && (
+          {(STATUS_META[meta.status]?.stage === "closed" || STATUS_META[meta.status]?.stage === "draft" || meta.archived) && (
             <form action={archiveAction}>
               <input type="hidden" name="id" value={id} />
               <input type="hidden" name="archived" value={meta.archived ? "0" : "1"} />
