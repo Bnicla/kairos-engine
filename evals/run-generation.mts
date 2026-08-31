@@ -54,7 +54,7 @@ for (const f of fixtures) {
     if (!report.success) throw new Error(`score schema invalid: ${report.error.issues[0]?.message}`);
     row.scored = true;
 
-    const meta = await createApplication(store, { company: f.id, role: f.title, snapshotMarkdown: f.jobText });
+    const meta = await createApplication(store, { company: f.id, role: f.title, snapshotMarkdown: f.jobText, source_url_unavailable: true });
     await saveScoredReport(store, meta.id, "eval", report.data as ScoreReport);
 
     // 2. Generate → guarded save, one findings-fed retry (mirrors production).

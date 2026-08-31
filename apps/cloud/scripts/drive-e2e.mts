@@ -52,6 +52,7 @@ const meta = await createApplication(store, {
   company: "Globex",
   role: "Head of Product",
   snapshotMarkdown: "# Head of Product\nPlatform adoption and support experience at scale.",
+  source_url_unavailable: true,
 });
 console.log("  appId:", meta.id);
 

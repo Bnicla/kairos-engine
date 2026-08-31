@@ -56,8 +56,8 @@ const INDEX = ["_index.json"];
 describe("applications index self-heal", () => {
   it("rebuilds dropped entries from the folder metas", async () => {
     const store = new MemStore();
-    const a = await createApplication(store, { company: "Acme", role: "PM", snapshotMarkdown: "ad A" });
-    const b = await createApplication(store, { company: "Beta", role: "Lead", snapshotMarkdown: "ad B" });
+    const a = await createApplication(store, { company: "Acme", role: "PM", snapshotMarkdown: "ad A" , source_url_unavailable: true });
+    const b = await createApplication(store, { company: "Beta", role: "Lead", snapshotMarkdown: "ad B" , source_url_unavailable: true });
 
     // Simulate a cross-process clobber: the index loses one entry.
     const idx = await store.readJson<{ version: 1; applications: { id: string }[] }>(INDEX);
@@ -74,15 +74,15 @@ describe("applications index self-heal", () => {
 
   it("leaves a consistent index untouched", async () => {
     const store = new MemStore();
-    await createApplication(store, { company: "Acme", role: "PM", snapshotMarkdown: "ad A" });
+    await createApplication(store, { company: "Acme", role: "PM", snapshotMarkdown: "ad A" , source_url_unavailable: true });
     const idx = await loadIndexHealed(store);
     expect(idx.applications).toHaveLength(1);
   });
 
   it("never shrinks the index on a stale (shorter) folder listing", async () => {
     const store = new MemStore();
-    await createApplication(store, { company: "Acme", role: "PM", snapshotMarkdown: "ad A" });
-    await createApplication(store, { company: "Beta", role: "Lead", snapshotMarkdown: "ad B" });
+    await createApplication(store, { company: "Acme", role: "PM", snapshotMarkdown: "ad A" , source_url_unavailable: true });
+    await createApplication(store, { company: "Beta", role: "Lead", snapshotMarkdown: "ad B" , source_url_unavailable: true });
 
     // Simulate a stale cached folder listing that misses the newest folder.
     const realListFolders = store.listFolders.bind(store);

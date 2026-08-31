@@ -177,6 +177,7 @@ export async function runCaptureTurn(
             role: input.role.trim(),
             snapshotMarkdown: input.job_text.slice(0, 60_000),
             source_url: input.source_url?.trim() || undefined,
+            source_url_unavailable: !input.source_url?.trim(),
           });
           appId = meta.id;
           try {

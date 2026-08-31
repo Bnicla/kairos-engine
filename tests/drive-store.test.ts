@@ -174,6 +174,7 @@ describe("DriveStore under the engine tool-core", () => {
       company: "Acme",
       role: "Head of AI",
       snapshotMarkdown: "# Head of AI\nAI strategy and AI strategy delivery.",
+    source_url_unavailable: true,
     });
     await saveScoredReport(store, meta.id, "Default résumé", {
       parse_safety: { verdict: "PASS", checks: [], ats_specific_note: "n" },

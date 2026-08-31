@@ -187,11 +187,25 @@ export async function createApplication(
     role: string;
     snapshotMarkdown: string;
     source_url?: string;
+    /**
+     * Every card must link back to its posting (the board renders it, and a
+     * card with no link has repeatedly meant a driver forgot to pass the URL
+     * on a paste-capture). Creating without a source_url therefore throws
+     * unless the caller explicitly declares the ad has no public URL
+     * (an emailed JD, a fixture).
+     */
+    source_url_unavailable?: boolean;
     req_id?: string;
     location?: string;
     detected_ats?: string;
   },
 ): Promise<ApplicationMeta> {
+  if (!input.source_url?.trim() && !input.source_url_unavailable) {
+    throw new Error(
+      `Refusing to create application for ${input.company} without a source_url. ` +
+        "Pass the posting URL (also alongside pasted text), or set source_url_unavailable: true for an ad with no public URL.",
+    );
+  }
   const now = new Date().toISOString();
   const id = applicationFolderName(input.company, input.role);
   const folder = [APPLICATIONS, id];
@@ -204,7 +218,7 @@ export async function createApplication(
     company: input.company,
     role: input.role,
     status: "captured",
-    source_url: input.source_url,
+    source_url: input.source_url?.trim() || undefined,
     req_id: input.req_id,
     location: input.location,
     detected_ats: input.detected_ats,

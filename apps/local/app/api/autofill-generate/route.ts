@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   );
   const appId = existing
     ? existing.id
-    : (await createApplication(store, { company, role: title, snapshotMarkdown: snapshot, source_url: url ?? "" })).id;
+    : (await createApplication(store, { company, role: title, snapshotMarkdown: snapshot, source_url: url, source_url_unavailable: !url })).id;
 
   // Best-effort background generation: don't block the response, and never let a
   // signature mismatch here break the capture (which already succeeded).

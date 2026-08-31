@@ -583,12 +583,17 @@ server.registerTool(
     inputSchema: {
       company: z.string(),
       role: z.string(),
-      url: z.string().optional().describe("Job posting URL (best-effort fetch)"),
+      url: z.string().optional().describe("Job posting URL (best-effort fetch). ALWAYS pass it, including alongside pasted text — it becomes the card's link."),
       text: z.string().optional().describe("Pasted ad text (use when no URL or fetch fails)"),
+      no_url: z.boolean().optional().describe("Set true ONLY when the ad genuinely has no public URL (e.g. an emailed JD). Without it, captures missing a url are rejected."),
     },
   },
-  guard(async ({ company, role, url, text }) => {
+  guard(async ({ company, role, url, text, no_url }) => {
     if (!url && !text) return fail("Provide either a url or the pasted text.");
+    if (!url && !no_url)
+      return fail(
+        "Pasted-text capture without a url: pass the posting URL too (it becomes the card's link), or set no_url: true if the ad truly has no public URL.",
+      );
     let ad;
     if (text && text.trim().length > 0) {
       ad = ingestPastedText(text, { company, title: role, source_url: url });
@@ -604,6 +609,7 @@ server.registerTool(
       role,
       snapshotMarkdown: ad.markdown,
       source_url: url,
+      source_url_unavailable: no_url,
     });
     // Best-effort form harvest (Greenhouse only): know every question the
     // application will ask BEFORE tailoring, so answers get drafted up front.

@@ -4,6 +4,16 @@ Work lands as scoped commits with descriptive messages, not squashes of weeks.
 (The public repo's initial commit is a deliberate exception: 91 private commits
 were withheld for privacy, snapshotted, and scrubbed — see the README note.)
 
+## 2026-08-31 — Card-creation invariant: no application without a source link
+
+- `createApplication` now throws when neither a `source_url` nor an explicit
+  `source_url_unavailable: true` is provided, and normalizes empty/whitespace
+  URLs to undefined. Regression guard for a real incident: paste-text captures
+  created cards the board rendered link-less. The MCP `capture_job_ad` tool
+  gained a `no_url` opt-out and rejects pasted-text captures that omit the
+  posting URL; cloud capture declares its LLM-extracted URL state explicitly.
+  Invariant pinned in `tests/capture-source-url.test.ts`.
+
 ## 2026-08-30 — Second-tier reviewer items: QA retrieval, context budgets, ADR-0006
 
 - **Relevance-ranked Q&A bank retrieval**: banked answers offered to the

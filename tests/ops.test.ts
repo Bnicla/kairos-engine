@@ -42,6 +42,7 @@ beforeAll(async () => {
     company: "Globex",
     role: "Head of Product",
     snapshotMarkdown: "# Head of Product\nWe want platform adoption, platform adoption, and support experience. Support matters.",
+  source_url_unavailable: true,
   });
   appId = meta.id;
 });
