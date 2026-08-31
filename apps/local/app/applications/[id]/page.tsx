@@ -42,9 +42,23 @@ export default async function ApplicationPage({ params }: { params: Promise<{ id
               {meta.applied_at ? <> · applied {meta.applied_at.slice(0, 10)}</> : null}
             </p>
           </div>
-          <span className={`badge badge-${STATUS_META[meta.status]?.tone ?? "neutral"} shrink-0`}>
-            {STATUS_META[meta.status]?.label ?? meta.status}
-          </span>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <span className={`badge badge-${STATUS_META[meta.status]?.tone ?? "neutral"}`}>
+              {STATUS_META[meta.status]?.label ?? meta.status}
+            </span>
+            {(STATUS_META[meta.status]?.stage === "closed" || STATUS_META[meta.status]?.stage === "draft" || meta.archived) && (
+              <form action={archiveAction}>
+                <input type="hidden" name="id" value={id} />
+                <input type="hidden" name="archived" value={meta.archived ? "0" : "1"} />
+                <button
+                  className="text-muted cursor-pointer text-[11px] underline hover:text-[color:var(--foreground)]"
+                  title={meta.archived ? "Bring this application back onto the board" : "Not relevant: hide from the board (nothing is deleted; restore any time)"}
+                >
+                  {meta.archived ? "Restore from archive" : "Archive"}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       </div>
 
@@ -100,15 +114,6 @@ export default async function ApplicationPage({ params }: { params: Promise<{ id
         <div className="border-border my-4 border-t" />
 
         <div className="flex flex-wrap items-center gap-4">
-          {(STATUS_META[meta.status]?.stage === "closed" || STATUS_META[meta.status]?.stage === "draft" || meta.archived) && (
-            <form action={archiveAction}>
-              <input type="hidden" name="id" value={id} />
-              <input type="hidden" name="archived" value={meta.archived ? "0" : "1"} />
-              <button className="btn-secondary text-sm">
-                {meta.archived ? "Restore from archive" : "Archive (hide from the board)"}
-              </button>
-            </form>
-          )}
           <details>
             <summary className="text-muted cursor-pointer text-xs underline">Delete this application…</summary>
             <div className="mt-2 flex flex-wrap items-center gap-3">
